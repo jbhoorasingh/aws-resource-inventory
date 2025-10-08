@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}ENIs - AWS Resource Inventory{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-network-wired"></i> Elastic Network Interfaces</h2>
+    <div class="d-flex gap-2">
+        <div class="input-group" style="width: 300px;">
+            <input type="text" class="form-control" id="searchInput" placeholder="Search ENIs...">
+            <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h5 class="text-primary">{{ total_enis }}</h5>
+                        <small class="text-muted">Total ENIs</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-success">{{ total_private_ips }}</h5>
+                        <small class="text-muted">Private IPs</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-info">{{ total_public_ips }}</h5>
+                        <small class="text-muted">Public IPs</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-warning">{{ total_regions }}</h5>
+                        <small class="text-muted">Regions</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">ENI Details</h5>
+            </div>
+            <div class="card-body">
+                {% if enis %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="enisTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ENI</th>
+                                    <th>IP Addresses</th>
+                                    <th>VPC</th>
+                                    <th>Subnet</th>
+                                    <th>Security Groups</th>
+                                    <th>Owner Account</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for eni in enis %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>{{ eni.eni_id }}</strong>
+                                            {% if eni.name %}
+                                                <br><small class="text-muted">{{ eni.name }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <span class="badge bg-primary">{{ eni.private_ip_address }}</span>
+                                            {% if eni.public_ip_address %}
+                                                <br><span class="badge bg-success">{{ eni.public_ip_address }}</span>
+                                            {% endif %}
+                                            {% for secondary_ip in eni.secondary_ips.all %}
+                                                <br><span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <code>{{ eni.subnet.vpc.vpc_id }}</code>
+                                        <br><small class="text-muted">{{ eni.subnet.vpc.cidr_block }}</small>
+                                    </td>
+                                    <td>
+                                        <code>{{ eni.subnet.subnet_id }}</code>
+                                        <br><small class="text-muted">{{ eni.subnet.cidr_block }}</small>
+                                        <br><small class="text-muted">{{ eni.subnet.availability_zone }}</small>
+                                    </td>
+                                    <td>
+                                        {% for sg in eni.eni_security_groups.all %}
+                                            <span class="badge bg-secondary">{{ sg.security_group.name }}</span>
+                                        {% empty %}
+                                            <span class="text-muted">None</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        <code>{{ eni.owner_account }}</code>
+                                    </td>
+                                    <td>
+                                        {% if eni.status == 'available' %}
+                                            <span class="badge bg-success">{{ eni.status }}</span>
+                                        {% elif eni.status == 'in-use' %}
+                                            <span class="badge bg-warning">{{ eni.status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ eni.status }}</span>
+                                        {% endif %}
+                                        {% if eni.attached_resource_id %}
+                                            <br><small class="text-muted">{{ eni.attached_resource_type }}</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-network-wired fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No ENIs found</h5>
+                        <p class="text-muted">Poll an AWS account to discover ENIs and other resources.</p>
+                        <a href="{% url 'accounts' %}" class="btn btn-primary">
+                            <i class="fas fa-users"></i> Go to Accounts
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Search functionality
+    $('#searchInput, #searchBtn').on('input click', function() {
+        const searchTerm = $('#searchInput').val().toLowerCase();
+        $('#enisTable tbody tr').each(function() {
+            const rowText = $(this).text().toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+    
+    // Auto-refresh every 30 seconds
+    setInterval(function() {
+        location.reload();
+    }, 30000);
+});
+</script>
+{% endblock %}

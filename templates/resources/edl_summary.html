@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}External Dynamic Lists (EDL) - AWS Resource Inventory{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-list-alt"></i> External Dynamic Lists (EDL)</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync"></i> Refresh
+        </button>
+        <button class="btn btn-outline-info" onclick="copyAllUrls()">
+            <i class="fas fa-copy"></i> Copy All URLs
+        </button>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <strong>Palo Alto EDL Integration:</strong> These endpoints provide IP address lists that can be consumed by Palo Alto firewalls as External Dynamic Lists. 
+            Each endpoint returns a plain text file with one IP address per line, including comments with ENI information.
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Account EDLs -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-users"></i> Account EDLs</h5>
+            </div>
+            <div class="card-body">
+                {% if accounts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Account</th>
+                                    <th>ENIs</th>
+                                    <th>IPs</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in accounts %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>{{ account.account_name|default:"No name" }}</strong>
+                                            <br><code>{{ account.account_id }}</code>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ account.eni_count }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ account.eni_count|add:account.eni_count }}</span>
+                                        <small class="text-muted d-block">Est. IPs</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="/edl/account/{{ account.account_id }}" 
+                                               class="btn btn-sm btn-outline-primary" 
+                                               target="_blank">
+                                                <i class="fas fa-eye"></i> View IPs
+                                            </a>
+                                            <a href="/edl/account/{{ account.account_id }}/json" 
+                                               class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-info"></i> JSON
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-users fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">No accounts with ENIs found.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Group EDLs -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Security Group EDLs</h5>
+            </div>
+            <div class="card-body">
+                {% if security_groups %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Security Group</th>
+                                    <th>VPC</th>
+                                    <th>ENIs</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sg in security_groups %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>{{ sg.name }}</strong>
+                                            <br><code>{{ sg.sg_id }}</code>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <code>{{ sg.vpc.vpc_id }}</code>
+                                        <br><small class="text-muted">{{ sg.vpc.region }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ sg.eni_count }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="/edl/sg/{{ sg.sg_id }}" 
+                                               class="btn btn-sm btn-outline-primary" 
+                                               target="_blank">
+                                                <i class="fas fa-eye"></i> View IPs
+                                            </a>
+                                            <a href="/edl/sg/{{ sg.sg_id }}/json" 
+                                               class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-info"></i> JSON
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-shield-alt fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">No security groups with ENIs found.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Instructions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-book"></i> Palo Alto Configuration</h5>
+            </div>
+            <div class="card-body">
+                <h6>External Dynamic List Setup:</h6>
+                <ol>
+                    <li>In Palo Alto Panorama or firewall, go to <strong>Objects → External Dynamic Lists</strong></li>
+                    <li>Click <strong>Add</strong> to create a new EDL</li>
+                    <li>Configure the EDL with these settings:
+                        <ul>
+                            <li><strong>Name:</strong> AWS-ENI-IPs (or your preferred name)</li>
+                            <li><strong>Type:</strong> IP List</li>
+                            <li><strong>Source:</strong> <code>https://your-domain.com/edl/account/123456789012</code></li>
+                            <li><strong>Update Schedule:</strong> Every 5 minutes (or as needed)</li>
+                        </ul>
+                    </li>
+                    <li>Use the EDL in security policies to allow/deny traffic from AWS ENI IPs</li>
+                </ol>
+                
+                <h6 class="mt-3">Example Security Policy:</h6>
+                <pre class="bg-light p-3 rounded"><code># Security Policy Rule
+Source: AWS-ENI-IPs (EDL)
+Destination: Any
+Service: Any
+Action: Allow</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyAllUrls() {
+    const urls = [];
+    
+    // Account URLs
+    {% for account in accounts %}
+    urls.push('https://' + window.location.host + '/edl/account/{{ account.account_id }}');
+    {% endfor %}
+    
+    // Security Group URLs
+    {% for sg in security_groups %}
+    urls.push('https://' + window.location.host + '/edl/sg/{{ sg.sg_id }}');
+    {% endfor %}
+    
+    const text = urls.join('\n');
+    navigator.clipboard.writeText(text).then(function() {
+        alert('All EDL URLs copied to clipboard!');
+    });
+}
+</script>
+{% endblock %}
