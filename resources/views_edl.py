@@ -226,14 +226,11 @@ def edl_enis_by_tags(request):
         for eni in enis:
             # Add primary IP
             if eni.private_ip_address:
-                # Include tag information in comment
-                tag_str = ', '.join([f"{k}={v}" for k, v in eni.tags.items()]) if eni.tags else 'no tags'
-                ip_lines.append(f"{eni.private_ip_address} # {eni.eni_id}, primary, tags: {tag_str}")
+                ip_lines.append(f"{eni.private_ip_address} # {eni.eni_id}, primary")
 
             # Add secondary IPs
             for secondary_ip in eni.secondary_ips.all():
-                tag_str = ', '.join([f"{k}={v}" for k, v in eni.tags.items()]) if eni.tags else 'no tags'
-                ip_lines.append(f"{secondary_ip.ip_address} # {eni.eni_id}, secondary, tags: {tag_str}")
+                ip_lines.append(f"{secondary_ip.ip_address} # {eni.eni_id}, secondary")
 
         # Create response
         response = HttpResponse('\n'.join(ip_lines), content_type='text/plain; charset=utf-8')

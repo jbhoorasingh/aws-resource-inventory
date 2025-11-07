@@ -46,6 +46,39 @@
     </div>
 </div>
 
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-filter"></i> Filter by Tags</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Tag Key</label>
+                        <input type="text" class="form-control" id="tagKeyFilter" placeholder="e.g., Environment">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tag Value</label>
+                        <input type="text" class="form-control" id="tagValueFilter" placeholder="e.g., PROD">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button class="btn btn-primary" id="applyTagFilter">
+                                <i class="fas fa-search"></i> Apply Filter
+                            </button>
+                            <button class="btn btn-secondary" id="clearTagFilter">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -63,6 +96,7 @@
                                     <th>Rules</th>
                                     <th>Owner Account</th>
                                     <th>Region</th>
+                                    <th>Tags</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -96,6 +130,17 @@
                                     <td>
                                         <span class="badge bg-secondary">{{ sg.vpc.region }}</span>
                                     </td>
+                                    <td data-tags='{{ sg.tags|safe }}'>
+                                        {% if sg.tags %}
+                                            {% for key, value in sg.tags.items %}
+                                                <span class="badge bg-light text-dark border mb-1" style="font-size: 0.7em;">
+                                                    <strong>{{ key }}:</strong> {{ value }}
+                                                </span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <a href="{% url 'security_group_detail' sg.id %}" class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-eye"></i> View Rules
@@ -123,6 +168,60 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Tag filtering
+    $('#applyTagFilter').click(function() {
+        const tagKey = $('#tagKeyFilter').val().trim();
+        const tagValue = $('#tagValueFilter').val().trim();
+
+        if (!tagKey) {
+            alert('Please enter a tag key to filter');
+            return;
+        }
+
+        $('#sgTable tbody tr').each(function() {
+            const row = $(this);
+            const tagsData = row.find('td[data-tags]').attr('data-tags');
+
+            try {
+                const tags = tagsData ? JSON.parse(tagsData.replace(/'/g, '"')) : {};
+                let shouldShow = false;
+
+                if (tagKey && tagValue) {
+                    // Both key and value specified
+                    shouldShow = tags[tagKey] && tags[tagKey].toLowerCase().includes(tagValue.toLowerCase());
+                } else if (tagKey) {
+                    // Only key specified - check if key exists
+                    shouldShow = tagKey in tags;
+                }
+
+                if (shouldShow) {
+                    row.show();
+                } else {
+                    row.hide();
+                }
+            } catch (e) {
+                // If parsing fails, hide the row
+                row.hide();
+            }
+        });
+    });
+
+    $('#clearTagFilter').click(function() {
+        $('#tagKeyFilter').val('');
+        $('#tagValueFilter').val('');
+        $('#sgTable tbody tr').show();
+    });
+
+    // Allow Enter key to trigger filter
+    $('#tagKeyFilter, #tagValueFilter').keypress(function(e) {
+        if (e.which === 13) {
+            $('#applyTagFilter').click();
+        }
+    });
+});
+</script>
 <script>
 $(document).ready(function() {
     // Search functionality
