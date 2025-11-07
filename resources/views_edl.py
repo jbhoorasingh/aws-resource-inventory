@@ -161,24 +161,24 @@ def edl_security_group_json(request, sg_id):
     """JSON endpoint for security group EDL metadata"""
     try:
         security_group = get_object_or_404(SecurityGroup, sg_id=sg_id)
-        
+
         # Get ENI count
         eni_count = ENI.objects.filter(
             eni_security_groups__security_group=security_group
         ).count()
-        
+
         # Get IP count (primary + secondary)
         primary_ips = ENI.objects.filter(
             eni_security_groups__security_group=security_group,
             private_ip_address__isnull=False
         ).exclude(private_ip_address='').count()
-        
+
         secondary_ips = ENISecondaryIP.objects.filter(
             eni__eni_security_groups__security_group=security_group
         ).count()
-        
+
         total_ips = primary_ips + secondary_ips
-        
+
         data = {
             'sg_id': sg_id,
             'sg_name': security_group.name,
@@ -190,8 +190,103 @@ def edl_security_group_json(request, sg_id):
             'secondary_ips': secondary_ips,
             'last_updated': security_group.updated_at.isoformat(),
         }
-        
+
         return JsonResponse(data)
-        
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@cache_page(300)  # Cache for 5 minutes
+def edl_enis_by_tags(request):
+    """
+    EDL endpoint for ENI IP addresses filtered by tags
+    Example: /edl/enis/?Environment=PROD&Application=WebServer
+    """
+    try:
+        # Start with all ENIs
+        enis = ENI.objects.all()
+
+        # Get tag filters from query parameters
+        tag_filters = {}
+        for key, value in request.GET.items():
+            if key:  # Ensure key is not empty
+                tag_filters[key] = value
+
+        # Filter ENIs by tags
+        # For each tag filter, check if the ENI has that tag with the specified value
+        for tag_key, tag_value in tag_filters.items():
+            enis = enis.filter(**{f'tags__{tag_key}': tag_value})
+
+        # Prefetch related data
+        enis = enis.select_related('subnet').prefetch_related('secondary_ips')
+
+        ip_lines = []
+
+        for eni in enis:
+            # Add primary IP
+            if eni.private_ip_address:
+                # Include tag information in comment
+                tag_str = ', '.join([f"{k}={v}" for k, v in eni.tags.items()]) if eni.tags else 'no tags'
+                ip_lines.append(f"{eni.private_ip_address} # {eni.eni_id}, primary, tags: {tag_str}")
+
+            # Add secondary IPs
+            for secondary_ip in eni.secondary_ips.all():
+                tag_str = ', '.join([f"{k}={v}" for k, v in eni.tags.items()]) if eni.tags else 'no tags'
+                ip_lines.append(f"{secondary_ip.ip_address} # {eni.eni_id}, secondary, tags: {tag_str}")
+
+        # Create response
+        response = HttpResponse('\n'.join(ip_lines), content_type='text/plain; charset=utf-8')
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Error generating EDL: {str(e)}", status=500)
+
+
+def edl_enis_by_tags_json(request):
+    """JSON endpoint for tag-filtered ENI EDL metadata"""
+    try:
+        # Start with all ENIs
+        enis = ENI.objects.all()
+
+        # Get tag filters from query parameters
+        tag_filters = {}
+        for key, value in request.GET.items():
+            if key:  # Ensure key is not empty
+                tag_filters[key] = value
+
+        # Filter ENIs by tags
+        for tag_key, tag_value in tag_filters.items():
+            enis = enis.filter(**{f'tags__{tag_key}': tag_value})
+
+        # Count results
+        eni_count = enis.count()
+
+        # Get IP count (primary + secondary)
+        primary_ips = enis.filter(
+            private_ip_address__isnull=False
+        ).exclude(private_ip_address='').count()
+
+        secondary_ips = ENISecondaryIP.objects.filter(
+            eni__in=enis
+        ).count()
+
+        total_ips = primary_ips + secondary_ips
+
+        # Build query string for URL
+        query_string = '&'.join([f"{k}={v}" for k, v in tag_filters.items()])
+
+        data = {
+            'filters': tag_filters,
+            'edl_url': f"/edl/enis/?{query_string}" if query_string else "/edl/enis/",
+            'eni_count': eni_count,
+            'total_ips': total_ips,
+            'primary_ips': primary_ips,
+            'secondary_ips': secondary_ips,
+        }
+
+        return JsonResponse(data)
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

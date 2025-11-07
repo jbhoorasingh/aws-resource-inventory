@@ -26,6 +26,7 @@ class VPC(models.Model):
     owner_account = models.CharField(max_length=12, help_text="Owner account ID")
     is_default = models.BooleanField(default=False, help_text="Whether this is the default VPC")
     state = models.CharField(max_length=20, help_text="VPC state")
+    tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -46,6 +47,7 @@ class Subnet(models.Model):
     availability_zone = models.CharField(max_length=50, help_text="Availability Zone")
     owner_account = models.CharField(max_length=12, help_text="Owner account ID")
     state = models.CharField(max_length=20, help_text="Subnet state")
+    tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -62,6 +64,7 @@ class SecurityGroup(models.Model):
     vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='security_groups')
     name = models.CharField(max_length=255, help_text="Security Group name")
     description = models.TextField(blank=True, help_text="Security Group description")
+    tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -121,6 +124,7 @@ class EC2Instance(models.Model):
     platform = models.CharField(max_length=50, blank=True, help_text="Platform (e.g., windows, linux)")
     launch_time = models.DateTimeField(null=True, blank=True, help_text="Instance launch time")
     owner_account = models.CharField(max_length=12, help_text="Owner account ID")
+    tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -147,6 +151,7 @@ class ENI(models.Model):
     attached_resource_id = models.CharField(max_length=255, blank=True, help_text="ID of attached resource (instance, load balancer, etc.)")
     attached_resource_type = models.CharField(max_length=50, blank=True, help_text="Type of attached resource")
     owner_account = models.CharField(max_length=12, default='', help_text="Owner account ID")
+    tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

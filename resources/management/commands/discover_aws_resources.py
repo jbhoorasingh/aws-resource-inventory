@@ -142,7 +142,8 @@ class Command(BaseCommand):
                         'cidr_block': vpc_data['cidr_block'],
                         'owner_account': vpc_data['owner_id'],
                         'is_default': vpc_data['is_default'],
-                        'state': vpc_data['state']
+                        'state': vpc_data['state'],
+                        'tags': vpc_data.get('tags', {})
                     }
                 )
                 if created:
@@ -160,7 +161,8 @@ class Command(BaseCommand):
                             'cidr_block': subnet_data['cidr_block'],
                             'availability_zone': subnet_data['availability_zone'],
                             'owner_account': subnet_data['owner_id'],
-                            'state': subnet_data['state']
+                            'state': subnet_data['state'],
+                            'tags': subnet_data.get('tags', {})
                         }
                     )
                     if created:
@@ -179,7 +181,8 @@ class Command(BaseCommand):
                         defaults={
                             'vpc': vpc,
                             'name': sg_data['name'],
-                            'description': sg_data['description']
+                            'description': sg_data['description'],
+                            'tags': sg_data.get('tags', {})
                         }
                     )
                     if created:
@@ -228,7 +231,8 @@ class Command(BaseCommand):
                             'public_ip_address': instance_data['public_ip_address'],
                             'platform': instance_data['platform'],
                             'launch_time': instance_data['launch_time'],
-                            'owner_account': instance_data['owner_id']
+                            'owner_account': instance_data['owner_id'],
+                            'tags': instance_data.get('tags', {})
                         }
                     )
                     if created:
@@ -267,7 +271,8 @@ class Command(BaseCommand):
                             'public_ip_address': eni_data['public_ip_address'],
                             'attached_resource_id': eni_data['attached_resource_id'],
                             'attached_resource_type': eni_data['attached_resource_type'],
-                            'owner_account': eni_data['owner_id']  # Use ENI's owner_id (already processed in service)
+                            'owner_account': eni_data['owner_id'],  # Use ENI's owner_id (already processed in service)
+                            'tags': eni_data.get('tags', {})
                         }
                     )
                     if created:

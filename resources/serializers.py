@@ -18,8 +18,8 @@ class VPCSerializer(serializers.ModelSerializer):
     class Meta:
         model = VPC
         fields = [
-            'id', 'vpc_id', 'region', 'cidr_block', 'owner_account', 
-            'is_default', 'state', 'created_at', 'updated_at'
+            'id', 'vpc_id', 'region', 'cidr_block', 'owner_account',
+            'is_default', 'state', 'tags', 'created_at', 'updated_at'
         ]
 
 
@@ -27,23 +27,23 @@ class SubnetSerializer(serializers.ModelSerializer):
     vpc_id = serializers.CharField(source='vpc.vpc_id', read_only=True)
     vpc_cidr = serializers.CharField(source='vpc.cidr_block', read_only=True)
     vpc_owner_account = serializers.CharField(source='vpc.owner_account', read_only=True)
-    
+
     class Meta:
         model = Subnet
         fields = [
-            'id', 'subnet_id', 'vpc', 'vpc_id', 'vpc_cidr', 'vpc_owner_account', 'name', 'cidr_block', 
-            'availability_zone', 'owner_account', 'state', 'created_at', 'updated_at'
+            'id', 'subnet_id', 'vpc', 'vpc_id', 'vpc_cidr', 'vpc_owner_account', 'name', 'cidr_block',
+            'availability_zone', 'owner_account', 'state', 'tags', 'created_at', 'updated_at'
         ]
 
 
 class SecurityGroupSerializer(serializers.ModelSerializer):
     vpc_id = serializers.CharField(source='vpc.vpc_id', read_only=True)
     vpc_owner_account = serializers.CharField(source='vpc.owner_account', read_only=True)
-    
+
     class Meta:
         model = SecurityGroup
         fields = [
-            'id', 'sg_id', 'vpc', 'vpc_id', 'vpc_owner_account', 'name', 'description', 
+            'id', 'sg_id', 'vpc', 'vpc_id', 'vpc_owner_account', 'name', 'description', 'tags',
             'created_at', 'updated_at'
         ]
 
@@ -57,7 +57,7 @@ class EC2InstanceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'instance_id', 'vpc_id', 'subnet_id', 'name', 'instance_type',
             'state', 'region', 'availability_zone', 'private_ip_address',
-            'public_ip_address', 'platform', 'launch_time', 'owner_account',
+            'public_ip_address', 'platform', 'launch_time', 'owner_account', 'tags',
             'created_at', 'updated_at'
         ]
 
@@ -99,7 +99,7 @@ class ENISerializer(serializers.ModelSerializer):
             'id', 'eni_id', 'subnet', 'subnet_id', 'subnet_cidr', 'vpc_id', 'vpc_cidr',
             'vpc_owner_account', 'subnet_owner_account', 'name', 'description', 'interface_type',
             'status', 'mac_address', 'private_ip_address', 'public_ip_address', 'attached_resource_id',
-            'attached_resource_type', 'ec2_instance_details', 'availability_zone', 'region', 'secondary_ips', 'security_groups',
+            'attached_resource_type', 'ec2_instance_details', 'availability_zone', 'region', 'secondary_ips', 'security_groups', 'tags',
             'created_at', 'updated_at'
         ]
 
