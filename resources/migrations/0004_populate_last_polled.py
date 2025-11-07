@@ -3,20 +3,6 @@
 from django.db import migrations
 
 
-def populate_last_polled(apps, schema_editor):
-    """Set last_polled to created_at for existing accounts"""
-    AWSAccount = apps.get_model('resources', 'AWSAccount')
-    for account in AWSAccount.objects.all():
-        account.last_polled = account.created_at
-        account.save()
-
-
-def reverse_populate_last_polled(apps, schema_editor):
-    """Reverse migration - set last_polled to None"""
-    AWSAccount = apps.get_model('resources', 'AWSAccount')
-    AWSAccount.objects.all().update(last_polled=None)
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -24,5 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(populate_last_polled, reverse_populate_last_polled),
     ]

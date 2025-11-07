@@ -1,55 +1,145 @@
 # AWS Resource Inventory
 
-A Django application for discovering and tracking AWS resources with IP addresses and ENIs across multiple regions and accounts.
+A Django-based application for discovering, tracking, and managing AWS networking resources across multiple AWS accounts and regions. Features include a REST API, web interface, and External Dynamic List (EDL) endpoints for Palo Alto Networks firewall integration.
 
 ## Features
 
-- **Multi-Account Support**: Track resources across different AWS accounts
-- **Multi-Region Discovery**: Scan resources in specified AWS regions
-- **Comprehensive Resource Tracking**:
-  - VPCs with CIDR blocks and owner accounts
-  - Subnets with names, CIDRs, AZs, and owner accounts
-  - ENIs with primary/secondary IPs, security groups, and attached resources
-  - Security Groups with detailed information
-- **REST API**: Query and filter resources via REST endpoints
-- **Admin Interface**: Manage resources through Django admin
-- **Management Commands**: Automated resource discovery via CLI
+- **Multi-Account & Multi-Region Support**: Discover resources across multiple AWS accounts and regions
+- **Comprehensive Resource Tracking**: Track VPCs, Subnets, ENIs, Security Groups, and their relationships
+- **REST API**: Full-featured API for programmatic access to resource data
+- **Web Interface**: User-friendly web UI for viewing and managing resources
+- **External Dynamic Lists (EDL)**: Integration with Palo Alto Networks firewalls for dynamic IP address lists
+- **IP Address Lookup**: Find ENIs by primary, public, or secondary IP addresses
 
-## Installation
+## Supported AWS Resources
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd aws-resource-inventory
-   ```
+- **VPCs** (Virtual Private Clouds)
+- **Subnets**
+- **ENIs** (Elastic Network Interfaces) with primary and secondary IPs
+- **Security Groups** with detailed ingress/egress rules
+- **Resource Attachments** (EC2 instances, ELBs, etc.)
 
-2. **Create and activate virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+## Quick Start
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Prerequisites
 
-4. **Configure environment**:
-   ```bash
-   cp env.example .env
-   # Edit .env with your AWS credentials and settings
-   ```
+- Python 3.12+
+- Poetry (for dependency management)
+- AWS credentials with appropriate permissions
 
-5. **Run migrations**:
-   ```bash
-   python manage.py makemigrations
-   python manage.py migrate
-   ```
+### Installation
 
-6. **Create superuser**:
-   ```bash
-   python manage.py createsuperuser
-   ```
+1. Clone the repository:
+```bash
+git clone https://github.com/jbhoorasingh/aws-resource-inventory.git
+cd aws-resource-inventory
+```
+
+2. Install dependencies:
+```bash
+poetry install
+```
+
+3. Configure environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+4. Restore project files (if needed):
+```bash
+git checkout 58bdc2d -- .
+```
+
+5. Run database migrations:
+```bash
+poetry run python manage.py migrate
+```
+
+6. Create a superuser:
+```bash
+poetry run python manage.py createsuperuser
+```
+
+7. Start the development server:
+```bash
+poetry run python manage.py runserver
+```
+
+The application will be available at:
+- **Web UI**: http://localhost:8000/
+- **Admin Panel**: http://localhost:8000/admin/
+- **API**: http://localhost:8000/api/
+- **EDL**: http://localhost:8000/edl/
+
+## Usage
+
+### Discovering AWS Resources
+
+Use the `discover_aws_resources` management command to poll AWS and populate the database:
+
+```bash
+poetry run python manage.py discover_aws_resources \
+  <account_number> \
+  <access_key_id> \
+  <secret_access_key> \
+  <session_token> \
+  <region1> [region2...] \
+  --account-name "Account Name"
+```
+
+Example:
+```bash
+poetry run python manage.py discover_aws_resources \
+  123456789012 \
+  AKIAIOSFODNN7EXAMPLE \
+  wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+  "" \
+  us-east-1 us-west-2 \
+  --account-name "Production Account"
+```
+
+**Dry Run Mode** (test without saving):
+```bash
+poetry run python manage.py discover_aws_resources ... --dry-run
+```
+
+### API Endpoints
+
+The REST API provides comprehensive access to all resource data:
+
+- **Accounts**: `/api/accounts/`
+- **VPCs**: `/api/vpcs/`
+- **Subnets**: `/api/subnets/`
+- **Security Groups**: `/api/security-groups/`
+- **ENIs**: `/api/enis/`
+
+#### Special ENI Endpoints
+
+- Find by IP: `/api/enis/by_ip/?ip=<address>`
+- Public IPs only: `/api/enis/with_public_ip/`
+- Statistics: `/api/enis/summary/`
+- Filter by region: `/api/enis/by_region/?region=<region>`
+- Filter by owner: `/api/enis/by_owner_account/?owner_account=<id>`
+
+All endpoints support filtering, pagination, and ordering.
+
+### External Dynamic Lists (EDL)
+
+EDL endpoints generate text files with IP addresses for Palo Alto Networks firewalls:
+
+- **EDL Summary**: `/edl/`
+- **Account IPs**: `/edl/account/<account_id>/`
+- **Security Group IPs**: `/edl/sg/<sg_id>/`
+- **JSON Metadata**: `/edl/account/<account_id>/json/` or `/edl/sg/<sg_id>/json/`
+
+EDL Format:
+```
+10.0.1.5 # eni-0123456789abcdef0, primary
+10.0.1.6 # eni-0123456789abcdef0, secondary
+```
+
+EDL responses are cached for 5 minutes.
 
 ## Configuration
 
@@ -57,243 +147,112 @@ A Django application for discovering and tracking AWS resources with IP addresse
 
 Create a `.env` file with the following variables:
 
+**Django Configuration:**
 ```bash
-# Django Settings
 SECRET_KEY=your-secret-key-here
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
+```
 
-# AWS Credentials
+**AWS Configuration:**
+```bash
 AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-access-key
-AWS_SESSION_TOKEN=your-session-token-if-using-temporary-credentials
-
-# AWS Configuration
+AWS_SESSION_TOKEN=your-session-token  # Optional, for temporary credentials
 AWS_DEFAULT_REGION=us-east-1
 AWS_REGIONS=us-east-1,us-west-2,eu-west-1
 ```
 
-### AWS Credentials
-
-The application supports multiple credential methods:
-
-1. **Environment Variables** (recommended for temporary credentials)
-2. **AWS Credentials File** (`~/.aws/credentials`)
-3. **IAM Roles** (if running on EC2)
-
-## Usage
-
-### Discovery Commands
-
-#### Basic Discovery
+**Database** (optional):
 ```bash
-python manage.py discover_aws_resources \
-  123456789012 \
-  AKIA... \
-  your-secret-access-key \
-  your-session-token \
-  us-east-1 us-west-2
+# Defaults to SQLite if not specified
+DATABASE_URL=postgresql://user:password@localhost:5432/aws_inventory
 ```
 
-#### With Account Name
+### AWS Permissions
+
+The application requires the following AWS permissions:
+- `ec2:DescribeVpcs`
+- `ec2:DescribeSubnets`
+- `ec2:DescribeSecurityGroups`
+- `ec2:DescribeNetworkInterfaces`
+- `sts:GetCallerIdentity`
+
+## Architecture
+
+### Data Model
+
+```
+AWSAccount
+    └── Tracks account metadata and last poll time
+
+VPC
+    ├── Subnet
+    │   └── ENI (Elastic Network Interface)
+    │       ├── ENISecondaryIP (secondary IPs)
+    │       └── ENISecurityGroup (many-to-many with SecurityGroup)
+    └── SecurityGroup
+        └── SecurityGroupRule (ingress/egress rules)
+```
+
+### Key Components
+
+- **Discovery Service** (`resources/services.py`): Interacts with AWS APIs via boto3
+- **Management Command** (`resources/management/commands/`): CLI for resource discovery
+- **REST API** (`resources/views.py`): DRF ViewSets for API endpoints
+- **Web UI** (`resources/views_frontend.py`): Server-side rendered views
+- **EDL** (`resources/views_edl.py`): Palo Alto firewall integration
+
+## Development
+
+### Running Tests
+
 ```bash
-python manage.py discover_aws_resources \
-  123456789012 \
-  AKIA... \
-  your-secret-access-key \
-  your-session-token \
-  us-east-1 us-west-2 \
-  --account-name "Production Account"
+poetry run pytest
 ```
 
-#### Dry Run
+### Database Migrations
+
 ```bash
-python manage.py discover_aws_resources \
-  123456789012 \
-  AKIA... \
-  your-secret-access-key \
-  your-session-token \
-  us-east-1 us-west-2 \
-  --dry-run
+# Create new migration
+poetry run python manage.py makemigrations
+
+# Apply migrations
+poetry run python manage.py migrate
 ```
 
-### Running the Application
+### Adding Dependencies
 
-1. **Start the development server**:
-   ```bash
-   python manage.py runserver
-   ```
-
-2. **Access the admin interface**:
-   - URL: http://localhost:8000/admin/
-   - Login with your superuser credentials
-
-3. **Access the API**:
-   - Base URL: http://localhost:8000/api/
-   - API Documentation: http://localhost:8000/api/
-
-## API Endpoints
-
-### Accounts
-- `GET /api/accounts/` - List all AWS accounts
-- `GET /api/accounts/{id}/` - Get account details
-
-### VPCs
-- `GET /api/vpcs/` - List all VPCs
-- `GET /api/vpcs/{id}/` - Get VPC details
-- Filter by: `account`, `region`, `is_default`, `state`
-
-### Subnets
-- `GET /api/subnets/` - List all subnets
-- `GET /api/subnets/{id}/` - Get subnet details
-- Filter by: `vpc`, `availability_zone`, `state`
-
-### Security Groups
-- `GET /api/security-groups/` - List all security groups
-- `GET /api/security-groups/{id}/` - Get security group details
-- Filter by: `vpc`, `account`, `region`
-
-### ENIs
-- `GET /api/enis/` - List all ENIs
-- `GET /api/enis/{id}/` - Get ENI details
-- `GET /api/enis/by_ip/?ip=10.0.1.100` - Find ENI by IP address
-- `GET /api/enis/with_public_ip/` - ENIs with public IPs
-- `GET /api/enis/attached_resources/` - ENIs with attached resources
-- `GET /api/enis/summary/` - Resource summary statistics
-- `GET /api/enis/by_region/?region=us-east-1` - ENIs by region
-- `GET /api/enis/by_account/?account_id=123456789012` - ENIs by account
-
-## Data Models
-
-### AWSAccount
-- `account_id`: AWS Account ID
-- `account_name`: Account name/alias
-- `is_active`: Whether account is monitored
-
-### VPC
-- `vpc_id`: VPC ID
-- `account`: Associated AWS account
-- `region`: AWS region
-- `cidr_block`: VPC CIDR block
-- `owner_account`: Owner account ID (for shared VPCs)
-- `is_default`: Whether this is the default VPC
-- `state`: VPC state
-
-### Subnet
-- `subnet_id`: Subnet ID
-- `vpc`: Associated VPC
-- `name`: Subnet name tag
-- `cidr_block`: Subnet CIDR block
-- `availability_zone`: AZ
-- `owner_account`: Owner account ID (for shared subnets)
-- `state`: Subnet state
-
-### ENI
-- `eni_id`: ENI ID
-- `subnet`: Associated subnet
-- `name`: ENI name tag
-- `description`: ENI description
-- `interface_type`: Interface type
-- `status`: ENI status
-- `mac_address`: MAC address
-- `private_ip_address`: Primary private IP
-- `public_ip_address`: Public IP (if assigned)
-- `attached_resource_id`: ID of attached resource
-- `attached_resource_type`: Type of attached resource
-
-### ENISecondaryIP
-- `eni`: Associated ENI
-- `ip_address`: Secondary IP address
-
-### ENISecurityGroup
-- `eni`: Associated ENI
-- `security_group`: Associated security group
-
-## Examples
-
-### Find ENI by IP Address
 ```bash
-curl "http://localhost:8000/api/enis/by_ip/?ip=10.0.1.100"
+# Production dependency
+poetry add package-name
+
+# Development dependency
+poetry add --group dev package-name
 ```
 
-### Get All ENIs with Public IPs
+### Django Shell
+
 ```bash
-curl "http://localhost:8000/api/enis/with_public_ip/"
+poetry run python manage.py shell
 ```
 
-### Get Resource Summary
-```bash
-curl "http://localhost:8000/api/enis/summary/"
-```
+## Technology Stack
 
-### Filter ENIs by Region
-```bash
-curl "http://localhost:8000/api/enis/by_region/?region=us-east-1"
-```
-
-### Filter ENIs by Account
-```bash
-curl "http://localhost:8000/api/enis/by_account/?account_id=123456789012"
-```
-
-## Scheduling Discovery
-
-### Using Cron
-Add to your crontab to run discovery every hour:
-```bash
-0 * * * * cd /path/to/aws-resource-inventory && python manage.py discover_aws_resources
-```
-
-### Using Celery (Advanced)
-For production environments, consider using Celery for scheduled discovery tasks.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **AWS Credentials**: Ensure your AWS credentials have the necessary permissions:
-   - `ec2:DescribeVpcs`
-   - `ec2:DescribeSubnets`
-   - `ec2:DescribeNetworkInterfaces`
-   - `ec2:DescribeSecurityGroups`
-   - `sts:GetCallerIdentity`
-
-2. **Region Access**: Some regions may not be accessible depending on your AWS account configuration.
-
-3. **Rate Limiting**: AWS API has rate limits. The application includes basic error handling, but you may need to implement retry logic for large-scale deployments.
-
-### Logging
-
-Enable detailed logging by setting the log level in your Django settings:
-```python
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': 'aws_inventory.log',
-        },
-    },
-    'loggers': {
-        'resources': {
-            'handlers': ['file'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-    },
-}
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+- **Django 4.2.7**: Web framework
+- **Django REST Framework 3.14.0**: REST API
+- **boto3 1.34.0**: AWS SDK
+- **PostgreSQL/SQLite**: Database
+- **Poetry**: Dependency management
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[Add your license here]
+
+## Contributing
+
+[Add contribution guidelines here]
+
+## Support
+
+[Add support contact or issue tracker info here]

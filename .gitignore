@@ -1,4 +1,5 @@
 working_file.md
+CLAUDE.md
 __pycache__/
 __pycache__
 *.pyc
@@ -14,7 +15,13 @@ db.sqlite3
 .vscode
 .pytest_cache
 .coverage
-.pytest_cache
+
+# Virtual environments
 .venv
+venv/
+env/
 
-
+# Poetry
+poetry.lock
+dist/
+*.egg-info/
