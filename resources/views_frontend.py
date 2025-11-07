@@ -10,7 +10,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 import subprocess
 import json
-from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule
+from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance
 
 
 def accounts_view(request):
@@ -41,7 +41,7 @@ def accounts_view(request):
 def enis_view(request):
     """Display ENIs page with detailed information"""
     enis = ENI.objects.select_related(
-        'subnet__vpc'
+        'subnet__vpc', 'ec2_instance'
     ).prefetch_related(
         'secondary_ips', 'eni_security_groups__security_group'
     ).all().order_by('-created_at')
@@ -245,3 +245,50 @@ def security_group_detail_view(request, sg_id):
     except SecurityGroup.DoesNotExist:
         messages.error(request, 'Security group not found.')
         return redirect('security_groups')
+
+
+def ec2_instances_view(request):
+    """Display EC2 instances page with detailed information"""
+    instances = EC2Instance.objects.select_related(
+        'vpc', 'subnet'
+    ).prefetch_related(
+        'enis__secondary_ips', 'enis__eni_security_groups__security_group'
+    ).all().order_by('-launch_time')
+
+    # Get summary statistics
+    total_instances = EC2Instance.objects.count()
+    running_instances = EC2Instance.objects.filter(state='running').count()
+    stopped_instances = EC2Instance.objects.filter(state='stopped').count()
+    total_regions = EC2Instance.objects.values('region').distinct().count()
+
+    context = {
+        'instances': instances,
+        'total_instances': total_instances,
+        'running_instances': running_instances,
+        'stopped_instances': stopped_instances,
+        'total_regions': total_regions,
+    }
+    return render(request, 'resources/ec2_instances.html', context)
+
+
+def ec2_instance_detail_view(request, instance_id):
+    """Display detailed EC2 instance information"""
+    try:
+        instance = EC2Instance.objects.select_related(
+            'vpc', 'subnet'
+        ).prefetch_related(
+            'enis__secondary_ips', 'enis__eni_security_groups__security_group'
+        ).get(id=instance_id)
+
+        # Get all ENIs for this instance
+        enis = instance.enis.all()
+
+        context = {
+            'instance': instance,
+            'enis': enis,
+        }
+        return render(request, 'resources/ec2_instance_detail.html', context)
+
+    except EC2Instance.DoesNotExist:
+        messages.error(request, 'EC2 instance not found.')
+        return redirect('ec2_instances')

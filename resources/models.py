@@ -106,10 +106,37 @@ class SecurityGroupRule(models.Model):
         return f"{self.rule_type.upper()} {protocol_display} {port_range} from {self.source_value}"
 
 
+class EC2Instance(models.Model):
+    """EC2 Instance information"""
+    instance_id = models.CharField(max_length=19, unique=True, help_text="EC2 Instance ID")
+    vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='instances')
+    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='instances')
+    name = models.CharField(max_length=255, blank=True, help_text="Instance name tag")
+    instance_type = models.CharField(max_length=50, help_text="Instance type (e.g., t2.micro, m5.large)")
+    state = models.CharField(max_length=20, help_text="Instance state (running, stopped, etc.)")
+    region = models.CharField(max_length=50, help_text="AWS Region")
+    availability_zone = models.CharField(max_length=50, help_text="Availability Zone")
+    private_ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Primary private IP address")
+    public_ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Public IP address if assigned")
+    platform = models.CharField(max_length=50, blank=True, help_text="Platform (e.g., windows, linux)")
+    launch_time = models.DateTimeField(null=True, blank=True, help_text="Instance launch time")
+    owner_account = models.CharField(max_length=12, help_text="Owner account ID")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['instance_id']
+        unique_together = ['instance_id', 'region']
+
+    def __str__(self):
+        return f"{self.name or self.instance_id} ({self.instance_type})"
+
+
 class ENI(models.Model):
     """Elastic Network Interface information"""
     eni_id = models.CharField(max_length=21, unique=True, help_text="ENI ID")
     subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='enis')
+    ec2_instance = models.ForeignKey(EC2Instance, on_delete=models.SET_NULL, null=True, blank=True, related_name='enis', help_text="Attached EC2 instance")
     name = models.CharField(max_length=255, blank=True, help_text="ENI name tag")
     description = models.TextField(blank=True, help_text="ENI description")
     interface_type = models.CharField(max_length=50, help_text="Interface type (e.g., interface, gateway_load_balancer)")
@@ -119,7 +146,7 @@ class ENI(models.Model):
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, help_text="Public IP address if assigned")
     attached_resource_id = models.CharField(max_length=255, blank=True, help_text="ID of attached resource (instance, load balancer, etc.)")
     attached_resource_type = models.CharField(max_length=50, blank=True, help_text="Type of attached resource")
-    owner_account = models.CharField(max_length=12, default='', help_text="Owner account ID")  # Add owner account field
+    owner_account = models.CharField(max_length=12, default='', help_text="Owner account ID")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

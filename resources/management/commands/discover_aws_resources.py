@@ -208,14 +208,56 @@ class Command(BaseCommand):
                         self.style.WARNING(f'VPC {sg_data["vpc_id"]} not found for security group {sg_data["sg_id"]}')
                     )
 
+            # Save EC2 Instances
+            from resources.models import EC2Instance
+            for instance_data in region_data.get('ec2_instances', []):
+                try:
+                    vpc = VPC.objects.get(vpc_id=instance_data['vpc_id'])
+                    subnet = Subnet.objects.get(subnet_id=instance_data['subnet_id'])
+                    instance, created = EC2Instance.objects.update_or_create(
+                        instance_id=instance_data['instance_id'],
+                        region=region,
+                        defaults={
+                            'vpc': vpc,
+                            'subnet': subnet,
+                            'name': instance_data['name'],
+                            'instance_type': instance_data['instance_type'],
+                            'state': instance_data['state'],
+                            'availability_zone': instance_data['availability_zone'],
+                            'private_ip_address': instance_data['private_ip_address'],
+                            'public_ip_address': instance_data['public_ip_address'],
+                            'platform': instance_data['platform'],
+                            'launch_time': instance_data['launch_time'],
+                            'owner_account': instance_data['owner_id']
+                        }
+                    )
+                    if created:
+                        total_saved += 1
+                except (VPC.DoesNotExist, Subnet.DoesNotExist) as e:
+                    self.stdout.write(
+                        self.style.WARNING(f'VPC or Subnet not found for instance {instance_data["instance_id"]}: {e}')
+                    )
+
             # Save ENIs
             for eni_data in region_data['enis']:
                 try:
                     subnet = Subnet.objects.get(subnet_id=eni_data['subnet_id'])
+
+                    # Link to EC2 instance if attached
+                    ec2_instance = None
+                    if eni_data['attached_resource_type'] == 'instance' and eni_data['attached_resource_id']:
+                        try:
+                            ec2_instance = EC2Instance.objects.get(instance_id=eni_data['attached_resource_id'])
+                        except EC2Instance.DoesNotExist:
+                            self.stdout.write(
+                                self.style.WARNING(f'EC2 instance {eni_data["attached_resource_id"]} not found for ENI {eni_data["eni_id"]}')
+                            )
+
                     eni, created = ENI.objects.update_or_create(
                         eni_id=eni_data['eni_id'],
                         defaults={
                             'subnet': subnet,
+                            'ec2_instance': ec2_instance,
                             'name': eni_data['name'],
                             'description': eni_data['description'],
                             'interface_type': eni_data['interface_type'],
@@ -272,11 +314,13 @@ class Command(BaseCommand):
         self.stdout.write(f'Total VPCs: {summary["total_vpcs"]}')
         self.stdout.write(f'Total Subnets: {summary["total_subnets"]}')
         self.stdout.write(f'Total Security Groups: {summary["total_security_groups"]}')
+        self.stdout.write(f'Total EC2 Instances: {summary["total_ec2_instances"]}')
         self.stdout.write(f'Total ENIs: {summary["total_enis"]}')
-        
+
         for region, region_data in results['regions'].items():
             self.stdout.write(f'\n{region}:')
             self.stdout.write(f'  VPCs: {len(region_data["vpcs"])}')
             self.stdout.write(f'  Subnets: {len(region_data["subnets"])}')
             self.stdout.write(f'  Security Groups: {len(region_data["security_groups"])}')
+            self.stdout.write(f'  EC2 Instances: {len(region_data.get("ec2_instances", []))}')
             self.stdout.write(f'  ENIs: {len(region_data["enis"])}')

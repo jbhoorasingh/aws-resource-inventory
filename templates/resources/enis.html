@@ -62,6 +62,7 @@
                                     <th>IP Addresses</th>
                                     <th>VPC</th>
                                     <th>Subnet</th>
+                                    <th>EC2 Instance</th>
                                     <th>Security Groups</th>
                                     <th>Owner Account</th>
                                     <th>Status</th>
@@ -97,6 +98,22 @@
                                         <code>{{ eni.subnet.subnet_id }}</code>
                                         <br><small class="text-muted">{{ eni.subnet.cidr_block }}</small>
                                         <br><small class="text-muted">{{ eni.subnet.availability_zone }}</small>
+                                    </td>
+                                    <td>
+                                        {% if eni.ec2_instance %}
+                                            <div>
+                                                <a href="{% url 'ec2_instance_detail' eni.ec2_instance.id %}" class="text-decoration-none">
+                                                    <strong>{{ eni.ec2_instance.name|default:eni.ec2_instance.instance_id }}</strong>
+                                                </a>
+                                                <br><code>{{ eni.ec2_instance.instance_id }}</code>
+                                                <br><span class="badge {% if eni.ec2_instance.state == 'running' %}bg-success{% elif eni.ec2_instance.state == 'stopped' %}bg-danger{% else %}bg-warning{% endif %}">{{ eni.ec2_instance.state }}</span>
+                                                <br><small class="text-muted">{{ eni.ec2_instance.instance_type }}</small>
+                                            </div>
+                                        {% elif eni.attached_resource_id %}
+                                            <small class="text-muted">{{ eni.attached_resource_type }}<br>{{ eni.attached_resource_id }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% for sg in eni.eni_security_groups.all %}

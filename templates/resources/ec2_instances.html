@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}EC2 Instances - AWS Resource Inventory{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-server"></i> EC2 Instances</h2>
+    <div class="d-flex gap-2">
+        <div class="input-group" style="width: 300px;">
+            <input type="text" class="form-control" id="searchInput" placeholder="Search Instances...">
+            <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        <button class="btn btn-outline-primary" onclick="location.reload()">
+            <i class="fas fa-sync"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h5 class="text-primary">{{ total_instances }}</h5>
+                        <small class="text-muted">Total Instances</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-success">{{ running_instances }}</h5>
+                        <small class="text-muted">Running</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-danger">{{ stopped_instances }}</h5>
+                        <small class="text-muted">Stopped</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-warning">{{ total_regions }}</h5>
+                        <small class="text-muted">Regions</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">EC2 Instances</h5>
+            </div>
+            <div class="card-body">
+                {% if instances %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="instancesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Instance</th>
+                                    <th>Type</th>
+                                    <th>State</th>
+                                    <th>IP Addresses</th>
+                                    <th>VPC / Subnet</th>
+                                    <th>Region / AZ</th>
+                                    <th>Launch Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for instance in instances %}
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <a href="{% url 'ec2_instance_detail' instance.id %}" class="text-decoration-none">
+                                                <strong>{{ instance.name|default:instance.instance_id }}</strong>
+                                            </a>
+                                            <br><code>{{ instance.instance_id }}</code>
+                                            {% if instance.platform %}
+                                                <br><small class="text-muted">{{ instance.platform }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ instance.instance_type }}</span>
+                                    </td>
+                                    <td>
+                                        {% if instance.state == 'running' %}
+                                            <span class="badge bg-success">{{ instance.state }}</span>
+                                        {% elif instance.state == 'stopped' %}
+                                            <span class="badge bg-danger">{{ instance.state }}</span>
+                                        {% elif instance.state == 'stopping' or instance.state == 'starting' %}
+                                            <span class="badge bg-warning">{{ instance.state }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ instance.state }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if instance.private_ip_address %}
+                                            <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
+                                        {% endif %}
+                                        {% if instance.public_ip_address %}
+                                            <br><span class="badge bg-success">{{ instance.public_ip_address }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <code>{{ instance.vpc.vpc_id }}</code>
+                                        <br><code>{{ instance.subnet.subnet_id }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ instance.region }}</span>
+                                        <br><small class="text-muted">{{ instance.availability_zone }}</small>
+                                    </td>
+                                    <td>
+                                        {% if instance.launch_time %}
+                                            <small>{{ instance.launch_time|date:"Y-m-d H:i" }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'ec2_instance_detail' instance.id %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i> View Details
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No EC2 Instances found</h5>
+                        <p class="text-muted">Poll an AWS account to discover EC2 instances.</p>
+                        <a href="{% url 'accounts' %}" class="btn btn-primary">
+                            <i class="fas fa-users"></i> Go to Accounts
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Search functionality
+    $('#searchInput, #searchBtn').on('input click', function() {
+        const searchTerm = $('#searchInput').val().toLowerCase();
+        $('#instancesTable tbody tr').each(function() {
+            const rowText = $(this).text().toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

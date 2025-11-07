@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ instance.name|default:instance.instance_id }} - EC2 Instance Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="fas fa-server"></i> {{ instance.name|default:instance.instance_id }}</h2>
+        <p class="text-muted mb-0">
+            <code>{{ instance.instance_id }}</code> in <code>{{ instance.vpc.vpc_id }}</code>
+        </p>
+    </div>
+    <a href="{% url 'ec2_instances' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Back to EC2 Instances
+    </a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Instance Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Instance ID:</strong> <code>{{ instance.instance_id }}</code><br>
+                        <strong>Name:</strong> {{ instance.name|default:"No name" }}<br>
+                        <strong>Instance Type:</strong> <span class="badge bg-info">{{ instance.instance_type }}</span><br>
+                        <strong>State:</strong>
+                        {% if instance.state == 'running' %}
+                            <span class="badge bg-success">{{ instance.state }}</span>
+                        {% elif instance.state == 'stopped' %}
+                            <span class="badge bg-danger">{{ instance.state }}</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ instance.state }}</span>
+                        {% endif %}
+                        <br>
+                        <strong>Platform:</strong> {{ instance.platform|default:"linux" }}<br>
+                        <strong>Launch Time:</strong> {{ instance.launch_time|date:"Y-m-d H:i:s"|default:"-" }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>VPC:</strong> <code>{{ instance.vpc.vpc_id }}</code> ({{ instance.vpc.cidr_block }})<br>
+                        <strong>Subnet:</strong> <code>{{ instance.subnet.subnet_id }}</code> ({{ instance.subnet.cidr_block }})<br>
+                        <strong>Region:</strong> <span class="badge bg-secondary">{{ instance.region }}</span><br>
+                        <strong>Availability Zone:</strong> {{ instance.availability_zone }}<br>
+                        <strong>Private IP:</strong>
+                        {% if instance.private_ip_address %}
+                            <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                        <br>
+                        <strong>Public IP:</strong>
+                        {% if instance.public_ip_address %}
+                            <span class="badge bg-success">{{ instance.public_ip_address }}</span>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                        <br>
+                        <strong>Owner Account:</strong> <code>{{ instance.owner_account }}</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Network Interfaces (ENIs)</h5>
+            </div>
+            <div class="card-body">
+                {% if enis %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ENI ID</th>
+                                    <th>Name</th>
+                                    <th>Primary IP</th>
+                                    <th>Public IP</th>
+                                    <th>Secondary IPs</th>
+                                    <th>Security Groups</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for eni in enis %}
+                                <tr>
+                                    <td><code>{{ eni.eni_id }}</code></td>
+                                    <td>{{ eni.name|default:"No name" }}</td>
+                                    <td><span class="badge bg-primary">{{ eni.private_ip_address }}</span></td>
+                                    <td>
+                                        {% if eni.public_ip_address %}
+                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% for secondary_ip in eni.secondary_ips.all %}
+                                            <span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
+                                        {% empty %}
+                                            <span class="text-muted">None</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for sg in eni.eni_security_groups.all %}
+                                            <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
+                                                <span class="badge bg-secondary">{{ sg.security_group.name }}</span>
+                                            </a>
+                                        {% empty %}
+                                            <span class="text-muted">None</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if eni.status == 'available' %}
+                                            <span class="badge bg-success">{{ eni.status }}</span>
+                                        {% elif eni.status == 'in-use' %}
+                                            <span class="badge bg-warning">{{ eni.status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ eni.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-network-wired fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">No ENIs are currently attached to this instance.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

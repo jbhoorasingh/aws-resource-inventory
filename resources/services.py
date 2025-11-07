@@ -254,6 +254,51 @@ class AWSResourceDiscovery:
             logger.error(f"Failed to discover ENIs in {region}: {e}")
             return []
     
+    def discover_ec2_instances(self, region: str, vpc_id: str = None) -> List[Dict[str, Any]]:
+        """Discover EC2 instances in a region, optionally filtered by VPC"""
+        try:
+            ec2_client = self.session.client('ec2', region_name=region)
+
+            instances = []
+            filters = [{'Name': 'instance-state-name', 'Values': ['running', 'stopped', 'stopping', 'starting']}]
+            if vpc_id:
+                filters.append({'Name': 'vpc-id', 'Values': [vpc_id]})
+
+            paginator = ec2_client.get_paginator('describe_instances')
+
+            for page in paginator.paginate(Filters=filters):
+                for reservation in page['Reservations']:
+                    for instance in reservation['Instances']:
+                        # Get primary private IP
+                        private_ip = instance.get('PrivateIpAddress')
+                        public_ip = instance.get('PublicIpAddress')
+
+                        # Get platform
+                        platform = instance.get('Platform', 'linux')  # Default to linux if not specified
+
+                        instance_data = {
+                            'instance_id': instance['InstanceId'],
+                            'vpc_id': instance.get('VpcId'),
+                            'subnet_id': instance.get('SubnetId'),
+                            'region': region,
+                            'name': self._get_tag_value(instance.get('Tags', []), 'Name', ''),
+                            'instance_type': instance['InstanceType'],
+                            'state': instance['State']['Name'],
+                            'availability_zone': instance['Placement']['AvailabilityZone'],
+                            'private_ip_address': private_ip,
+                            'public_ip_address': public_ip,
+                            'platform': platform,
+                            'launch_time': instance.get('LaunchTime'),
+                            'owner_id': reservation.get('OwnerId', ''),
+                            'tags': {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}
+                        }
+                        instances.append(instance_data)
+
+            return instances
+        except Exception as e:
+            logger.error(f"Failed to discover EC2 instances in {region}: {e}")
+            return []
+
     def _get_tag_value(self, tags: List[Dict], key: str, default: str = '') -> str:
         """Helper to get tag value from AWS tag list"""
         for tag in tags:
@@ -270,40 +315,48 @@ class AWSResourceDiscovery:
                 'total_vpcs': 0,
                 'total_subnets': 0,
                 'total_security_groups': 0,
+                'total_ec2_instances': 0,
                 'total_enis': 0
             }
         }
-        
+
         for region in regions:
             logger.info(f"Discovering resources in {region}")
             region_results = {
                 'vpcs': self.discover_vpcs(region),
                 'subnets': [],
                 'security_groups': [],
+                'ec2_instances': [],
                 'enis': []
             }
-            
+
             # Discover subnets for each VPC
             for vpc in region_results['vpcs']:
                 subnets = self.discover_subnets(region, vpc['vpc_id'])
                 region_results['subnets'].extend(subnets)
-            
+
             # Discover security groups for each VPC
             for vpc in region_results['vpcs']:
                 sgs = self.discover_security_groups(region, vpc['vpc_id'])
                 region_results['security_groups'].extend(sgs)
-            
+
+            # Discover EC2 instances for each VPC
+            for vpc in region_results['vpcs']:
+                instances = self.discover_ec2_instances(region, vpc['vpc_id'])
+                region_results['ec2_instances'].extend(instances)
+
             # Discover ENIs for each subnet
             for subnet in region_results['subnets']:
                 enis = self.discover_enis(region, subnet['subnet_id'])
                 region_results['enis'].extend(enis)
-            
+
             results['regions'][region] = region_results
-            
+
             # Update summary
             results['summary']['total_vpcs'] += len(region_results['vpcs'])
             results['summary']['total_subnets'] += len(region_results['subnets'])
             results['summary']['total_security_groups'] += len(region_results['security_groups'])
+            results['summary']['total_ec2_instances'] += len(region_results['ec2_instances'])
             results['summary']['total_enis'] += len(region_results['enis'])
-        
+
         return results

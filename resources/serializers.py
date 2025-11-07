@@ -3,7 +3,7 @@ Serializers for AWS resources API
 """
 from rest_framework import serializers
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, ENI, 
+    AWSAccount, VPC, Subnet, SecurityGroup, EC2Instance, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
 
@@ -48,6 +48,20 @@ class SecurityGroupSerializer(serializers.ModelSerializer):
         ]
 
 
+class EC2InstanceSerializer(serializers.ModelSerializer):
+    vpc_id = serializers.CharField(source='vpc.vpc_id', read_only=True)
+    subnet_id = serializers.CharField(source='subnet.subnet_id', read_only=True)
+
+    class Meta:
+        model = EC2Instance
+        fields = [
+            'id', 'instance_id', 'vpc_id', 'subnet_id', 'name', 'instance_type',
+            'state', 'region', 'availability_zone', 'private_ip_address',
+            'public_ip_address', 'platform', 'launch_time', 'owner_account',
+            'created_at', 'updated_at'
+        ]
+
+
 class ENISecondaryIPSerializer(serializers.ModelSerializer):
     class Meta:
         model = ENISecondaryIP
@@ -74,17 +88,18 @@ class ENISerializer(serializers.ModelSerializer):
     subnet_owner_account = serializers.CharField(source='subnet.owner_account', read_only=True)
     availability_zone = serializers.CharField(source='subnet.availability_zone', read_only=True)
     region = serializers.CharField(source='subnet.vpc.region', read_only=True)
-    
+
     secondary_ips = ENISecondaryIPSerializer(many=True, read_only=True)
     security_groups = ENISecurityGroupSerializer(source='eni_security_groups', many=True, read_only=True)
-    
+    ec2_instance_details = EC2InstanceSerializer(source='ec2_instance', read_only=True)
+
     class Meta:
         model = ENI
         fields = [
             'id', 'eni_id', 'subnet', 'subnet_id', 'subnet_cidr', 'vpc_id', 'vpc_cidr',
-            'vpc_owner_account', 'subnet_owner_account', 'name', 'description', 'interface_type', 
-            'status', 'mac_address', 'private_ip_address', 'public_ip_address', 'attached_resource_id', 
-            'attached_resource_type', 'availability_zone', 'region', 'secondary_ips', 'security_groups', 
+            'vpc_owner_account', 'subnet_owner_account', 'name', 'description', 'interface_type',
+            'status', 'mac_address', 'private_ip_address', 'public_ip_address', 'attached_resource_id',
+            'attached_resource_type', 'ec2_instance_details', 'availability_zone', 'region', 'secondary_ips', 'security_groups',
             'created_at', 'updated_at'
         ]
 

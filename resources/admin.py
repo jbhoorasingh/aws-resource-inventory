@@ -4,7 +4,7 @@ Django admin configuration for AWS resources
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, ENI, 
+    AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
 
@@ -90,6 +90,28 @@ class SecurityGroupRuleAdmin(admin.ModelAdmin):
     description_short.short_description = 'Description'
 
 
+@admin.register(EC2Instance)
+class EC2InstanceAdmin(admin.ModelAdmin):
+    list_display = ['instance_id', 'name', 'instance_type', 'state', 'vpc', 'subnet', 'private_ip_address', 'public_ip_address', 'region', 'availability_zone']
+    list_filter = ['state', 'region', 'availability_zone', 'instance_type', 'platform', 'owner_account', 'created_at']
+    search_fields = ['instance_id', 'name', 'private_ip_address', 'public_ip_address', 'owner_account']
+    readonly_fields = ['created_at', 'updated_at', 'launch_time']
+    raw_id_fields = ['vpc', 'subnet']
+    ordering = ['-launch_time']
+
+    fieldsets = (
+        ('Instance Information', {
+            'fields': ('instance_id', 'name', 'instance_type', 'state', 'platform')
+        }),
+        ('Network Information', {
+            'fields': ('vpc', 'subnet', 'private_ip_address', 'public_ip_address', 'region', 'availability_zone')
+        }),
+        ('Metadata', {
+            'fields': ('owner_account', 'launch_time', 'created_at', 'updated_at')
+        }),
+    )
+
+
 class ENISecondaryIPInline(admin.TabularInline):
     model = ENISecondaryIP
     extra = 0
@@ -111,26 +133,34 @@ class ENISecurityGroupInline(admin.TabularInline):
 @admin.register(ENI)
 class ENIAdmin(admin.ModelAdmin):
     list_display = [
-        'eni_id', 'name', 'subnet', 'private_ip_address', 'public_ip_address', 
-        'interface_type', 'status', 'attached_resource_info', 'secondary_ips_count', 'security_groups_count'
+        'eni_id', 'name', 'subnet', 'private_ip_address', 'public_ip_address',
+        'interface_type', 'status', 'ec2_instance_info', 'attached_resource_info', 'secondary_ips_count', 'security_groups_count'
     ]
     list_filter = [
-        'subnet__vpc__region', 'interface_type', 
+        'subnet__vpc__region', 'interface_type',
         'status', 'attached_resource_type', 'created_at'
     ]
     search_fields = [
-        'eni_id', 'name', 'description', 'private_ip_address', 
-        'public_ip_address', 'attached_resource_id'
+        'eni_id', 'name', 'description', 'private_ip_address',
+        'public_ip_address', 'attached_resource_id', 'ec2_instance__instance_id', 'ec2_instance__name'
     ]
     readonly_fields = ['created_at', 'updated_at', 'secondary_ips_list', 'security_groups_list']
-    raw_id_fields = ['subnet']
+    raw_id_fields = ['subnet', 'ec2_instance']
     inlines = [ENISecondaryIPInline, ENISecurityGroupInline]
 
+    def ec2_instance_info(self, obj):
+        if obj.ec2_instance:
+            instance = obj.ec2_instance
+            display_name = instance.name or instance.instance_id
+            return format_html('<span style="color: green;">{} ({})</span>', display_name, instance.state)
+        return "-"
+    ec2_instance_info.short_description = 'EC2 Instance'
+
     def attached_resource_info(self, obj):
-        if obj.attached_resource_id:
+        if obj.attached_resource_id and obj.attached_resource_type != 'instance':
             return f"{obj.attached_resource_type}: {obj.attached_resource_id}"
-        return "Not attached"
-    attached_resource_info.short_description = 'Attached Resource'
+        return "-"
+    attached_resource_info.short_description = 'Other Resource'
 
     def secondary_ips_count(self, obj):
         return obj.secondary_ips.count()
