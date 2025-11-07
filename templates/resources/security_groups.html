@@ -71,7 +71,9 @@
                                 <tr>
                                     <td>
                                         <div>
-                                            <strong>{{ sg.name }}</strong>
+                                            <a href="{% url 'security_group_detail' sg.id %}" class="text-decoration-none">
+                                                <strong>{{ sg.name }}</strong>
+                                            </a>
                                             <br><code>{{ sg.sg_id }}</code>
                                             {% if sg.description %}
                                                 <br><small class="text-muted">{{ sg.description }}</small>

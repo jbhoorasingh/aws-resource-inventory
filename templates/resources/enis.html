@@ -100,7 +100,9 @@
                                     </td>
                                     <td>
                                         {% for sg in eni.eni_security_groups.all %}
-                                            <span class="badge bg-secondary">{{ sg.security_group.name }}</span>
+                                            <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
+                                                <span class="badge bg-secondary">{{ sg.security_group.name }}</span>
+                                            </a>
                                         {% empty %}
                                             <span class="text-muted">None</span>
                                         {% endfor %}
