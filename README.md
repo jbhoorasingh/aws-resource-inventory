@@ -5,9 +5,10 @@ A Django-based application for discovering, tracking, and managing AWS networkin
 ## Features
 
 - **Multi-Account & Multi-Region Support**: Discover resources across multiple AWS accounts and regions
-- **Comprehensive Resource Tracking**: Track VPCs, Subnets, ENIs, Security Groups, and their relationships
+- **Comprehensive Resource Tracking**: Track VPCs, Subnets, EC2 Instances, ENIs, Security Groups, and their relationships
 - **REST API**: Full-featured API for programmatic access to resource data
 - **Web Interface**: User-friendly web UI for viewing and managing resources
+- **EC2 Instance Tracking**: View instance details, state, type, and associated network interfaces
 - **External Dynamic Lists (EDL)**: Integration with Palo Alto Networks firewalls for dynamic IP address lists
 - **IP Address Lookup**: Find ENIs by primary, public, or secondary IP addresses
 
@@ -15,9 +16,10 @@ A Django-based application for discovering, tracking, and managing AWS networkin
 
 - **VPCs** (Virtual Private Clouds)
 - **Subnets**
+- **EC2 Instances** with state, type, platform, and launch time tracking
 - **ENIs** (Elastic Network Interfaces) with primary and secondary IPs
 - **Security Groups** with detailed ingress/egress rules
-- **Resource Attachments** (EC2 instances, ELBs, etc.)
+- **Resource Attachments** (Load Balancers, etc.)
 
 ## Quick Start
 
@@ -46,22 +48,17 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-4. Restore project files (if needed):
-```bash
-git checkout 58bdc2d -- .
-```
-
-5. Run database migrations:
+4. Run database migrations:
 ```bash
 poetry run python manage.py migrate
 ```
 
-6. Create a superuser:
+5. Create a superuser:
 ```bash
 poetry run python manage.py createsuperuser
 ```
 
-7. Start the development server:
+6. Start the development server:
 ```bash
 poetry run python manage.py runserver
 ```
@@ -176,6 +173,7 @@ The application requires the following AWS permissions:
 - `ec2:DescribeSubnets`
 - `ec2:DescribeSecurityGroups`
 - `ec2:DescribeNetworkInterfaces`
+- `ec2:DescribeInstances`
 - `sts:GetCallerIdentity`
 
 ## Architecture
@@ -188,12 +186,20 @@ AWSAccount
 
 VPC
     ├── Subnet
+    │   ├── EC2Instance (instance details, state, type, IPs, launch time)
+    │   │   └── ENI (many-to-one: multiple ENIs per instance)
     │   └── ENI (Elastic Network Interface)
+    │       ├── EC2Instance (foreign key to attached instance)
     │       ├── ENISecondaryIP (secondary IPs)
     │       └── ENISecurityGroup (many-to-many with SecurityGroup)
     └── SecurityGroup
         └── SecurityGroupRule (ingress/egress rules)
 ```
+
+**Key Relationships:**
+- Each **ENI** can be attached to one **EC2Instance** (optional)
+- Each **EC2Instance** can have multiple **ENIs**
+- ENIs track both EC2 instances and other AWS resources (load balancers, etc.)
 
 ### Key Components
 
