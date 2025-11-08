@@ -6,42 +6,62 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-list-alt"></i> External Dynamic Lists (EDL)</h2>
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-primary" onclick="location.reload()">
-            <i class="fas fa-sync"></i> Refresh
-        </button>
-        <button class="btn btn-outline-info" onclick="copyAllUrls()">
-            <i class="fas fa-copy"></i> Copy All URLs
-        </button>
-    </div>
+    <button class="btn btn-outline-primary" onclick="location.reload()">
+        <i class="fas fa-sync"></i> Refresh
+    </button>
 </div>
 
 <div class="row mb-4">
     <div class="col-12">
         <div class="alert alert-info">
             <i class="fas fa-info-circle"></i>
-            <strong>Palo Alto EDL Integration:</strong> These endpoints provide IP address lists that can be consumed by Palo Alto firewalls as External Dynamic Lists. 
-            Each endpoint returns a plain text file with one IP address per line, including comments with ENI information.
+            <strong>Palo Alto EDL Integration:</strong> These endpoints provide IP address lists that can be consumed by Palo Alto firewalls as External Dynamic Lists.
         </div>
     </div>
 </div>
 
-<div class="row">
-    <!-- Account EDLs -->
-    <div class="col-md-6">
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="edlTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts" type="button" role="tab">
+            <i class="fas fa-users"></i> Accounts <span class="badge bg-primary ms-1">{{ accounts|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="security-groups-tab" data-bs-toggle="tab" data-bs-target="#security-groups" type="button" role="tab">
+            <i class="fas fa-shield-alt"></i> Security Groups <span class="badge bg-primary ms-1">{{ security_groups|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="eni-filter-tab" data-bs-toggle="tab" data-bs-target="#eni-filter" type="button" role="tab">
+            <i class="fas fa-filter"></i> ENI Filter Builder
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="edlTabContent">
+    <!-- Accounts Tab -->
+    <div class="tab-pane fade show active" id="accounts" role="tabpanel">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-users"></i> Account EDLs</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="mb-0"><i class="fas fa-users"></i> Account EDLs</h5>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control form-control-sm" id="accountSearch" placeholder="Search accounts...">
+                    </div>
+                </div>
             </div>
             <div class="card-body">
                 {% if accounts %}
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm table-hover" id="accountsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Account</th>
                                     <th>ENIs</th>
-                                    <th>IPs</th>
+                                    <th>EDL URL</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -49,28 +69,27 @@
                                 {% for account in accounts %}
                                 <tr>
                                     <td>
-                                        <div>
-                                            <strong>{{ account.account_name|default:"No name" }}</strong>
-                                            <br><code>{{ account.account_id }}</code>
-                                        </div>
+                                        <strong>{{ account.account_name|default:"No name" }}</strong>
+                                        <br><small><code>{{ account.account_id }}</code></small>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary">{{ account.eni_count }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">{{ account.eni_count|add:account.eni_count }}</span>
-                                        <small class="text-muted d-block">Est. IPs</small>
+                                        <input type="text" class="form-control form-control-sm" readonly
+                                               value="https://{{ request.get_host }}/edl/account/{{ account.account_id }}"
+                                               id="url-account-{{ account.account_id }}">
                                     </td>
                                     <td>
-                                        <div class="btn-group" role="group">
-                                            <a href="/edl/account/{{ account.account_id }}" 
-                                               class="btn btn-sm btn-outline-primary" 
-                                               target="_blank">
-                                                <i class="fas fa-eye"></i> View IPs
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" onclick="copyUrl('url-account-{{ account.account_id }}')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="/edl/account/{{ account.account_id }}" class="btn btn-outline-primary" target="_blank">
+                                                <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="/edl/account/{{ account.account_id }}/json" 
-                                               class="btn btn-sm btn-outline-info">
-                                                <i class="fas fa-info"></i> JSON
+                                            <a href="/edl/account/{{ account.account_id }}/json" class="btn btn-outline-info" target="_blank">
+                                                <i class="fas fa-info"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -80,30 +99,38 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-users fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">No accounts with ENIs found.</p>
+                    <div class="text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No accounts found</h5>
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Security Group EDLs -->
-    <div class="col-md-6">
+    <!-- Security Groups Tab -->
+    <div class="tab-pane fade" id="security-groups" role="tabpanel">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Security Group EDLs</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Security Group EDLs</h5>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control form-control-sm" id="sgSearch" placeholder="Search security groups...">
+                    </div>
+                </div>
             </div>
             <div class="card-body">
                 {% if security_groups %}
                     <div class="table-responsive">
-                        <table class="table table-sm">
+                        <table class="table table-sm table-hover" id="sgTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Security Group</th>
                                     <th>VPC</th>
                                     <th>ENIs</th>
+                                    <th>EDL URL</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -111,28 +138,31 @@
                                 {% for sg in security_groups %}
                                 <tr>
                                     <td>
-                                        <div>
-                                            <strong>{{ sg.name }}</strong>
-                                            <br><code>{{ sg.sg_id }}</code>
-                                        </div>
+                                        <strong>{{ sg.name }}</strong>
+                                        <br><small><code>{{ sg.sg_id }}</code></small>
                                     </td>
                                     <td>
-                                        <code>{{ sg.vpc.vpc_id }}</code>
+                                        <code style="font-size: 0.85em;">{{ sg.vpc.vpc_id }}</code>
                                         <br><small class="text-muted">{{ sg.vpc.region }}</small>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary">{{ sg.eni_count }}</span>
                                     </td>
                                     <td>
-                                        <div class="btn-group" role="group">
-                                            <a href="/edl/sg/{{ sg.sg_id }}" 
-                                               class="btn btn-sm btn-outline-primary" 
-                                               target="_blank">
-                                                <i class="fas fa-eye"></i> View IPs
+                                        <input type="text" class="form-control form-control-sm" readonly
+                                               value="https://{{ request.get_host }}/edl/sg/{{ sg.sg_id }}"
+                                               id="url-sg-{{ sg.sg_id }}">
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" onclick="copyUrl('url-sg-{{ sg.sg_id }}')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="/edl/sg/{{ sg.sg_id }}" class="btn btn-outline-primary" target="_blank">
+                                                <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="/edl/sg/{{ sg.sg_id }}/json" 
-                                               class="btn btn-sm btn-outline-info">
-                                                <i class="fas fa-info"></i> JSON
+                                            <a href="/edl/sg/{{ sg.sg_id }}/json" class="btn btn-outline-info" target="_blank">
+                                                <i class="fas fa-info"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -142,11 +172,77 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-shield-alt fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">No security groups with ENIs found.</p>
+                    <div class="text-center py-5">
+                        <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No security groups found</h5>
                     </div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ENI Filter Builder Tab -->
+    <div class="tab-pane fade" id="eni-filter" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-filter"></i> Build Custom ENI Filter EDL</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Create a custom EDL by filtering ENIs based on AWS tags.</p>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <h6>Add Tag Filters:</h6>
+                        <div id="tagFilters">
+                            <div class="row mb-2 tag-filter-row">
+                                <div class="col-md-5">
+                                    <input type="text" class="form-control tag-key" placeholder="Tag Key (e.g., Environment)">
+                                </div>
+                                <div class="col-md-5">
+                                    <input type="text" class="form-control tag-value" placeholder="Tag Value (e.g., PROD)">
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-outline-danger btn-sm" onclick="removeTagFilter(this)" disabled>
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="addTagFilter()">
+                            <i class="fas fa-plus"></i> Add Another Tag
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <h6>Generated EDL URL:</h6>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="generatedUrl" readonly
+                                   value="https://{{ request.get_host }}/edl/enis/">
+                            <button class="btn btn-outline-secondary" onclick="copyUrl('generatedUrl')">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                            <a href="#" id="viewGeneratedUrl" class="btn btn-outline-primary" target="_blank">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </div>
+                        <small class="text-muted">Tags will be added as query parameters</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-secondary">
+                            <strong>Example URLs:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li><code>https://{{ request.get_host }}/edl/enis/?Environment=PROD</code></li>
+                                <li><code>https://{{ request.get_host }}/edl/enis/?Environment=PROD&Application=WebServer</code></li>
+                                <li><code>https://{{ request.get_host }}/edl/enis/?Team=DevOps</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -189,23 +285,110 @@ Action: Allow</code></pre>
 
 {% block extra_js %}
 <script>
-function copyAllUrls() {
-    const urls = [];
-    
-    // Account URLs
-    {% for account in accounts %}
-    urls.push('https://' + window.location.host + '/edl/account/{{ account.account_id }}');
-    {% endfor %}
-    
-    // Security Group URLs
-    {% for sg in security_groups %}
-    urls.push('https://' + window.location.host + '/edl/sg/{{ sg.sg_id }}');
-    {% endfor %}
-    
-    const text = urls.join('\n');
-    navigator.clipboard.writeText(text).then(function() {
-        alert('All EDL URLs copied to clipboard!');
+// Copy URL to clipboard
+function copyUrl(inputId) {
+    const input = document.getElementById(inputId);
+    input.select();
+    input.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(input.value).then(function() {
+        // Show tooltip or brief notification
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+        }, 1000);
     });
 }
+
+// Search functionality for accounts
+$(document).ready(function() {
+    $('#accountSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('#accountsTable tbody tr').each(function() {
+            const rowText = $(this).text().toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+
+// Search functionality for security groups
+$(document).ready(function() {
+    $('#sgSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('#sgTable tbody tr').each(function() {
+            const rowText = $(this).text().toLowerCase();
+            if (rowText.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+
+// ENI Filter Builder functionality
+function addTagFilter() {
+    const container = document.getElementById('tagFilters');
+    const newRow = document.createElement('div');
+    newRow.className = 'row mb-2 tag-filter-row';
+    newRow.innerHTML = `
+        <div class="col-md-5">
+            <input type="text" class="form-control tag-key" placeholder="Tag Key (e.g., Environment)">
+        </div>
+        <div class="col-md-5">
+            <input type="text" class="form-control tag-value" placeholder="Tag Value (e.g., PROD)">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-danger btn-sm" onclick="removeTagFilter(this)">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(newRow);
+    attachTagInputListeners(newRow);
+}
+
+function removeTagFilter(button) {
+    const row = button.closest('.tag-filter-row');
+    row.remove();
+    updateGeneratedUrl();
+}
+
+function attachTagInputListeners(row) {
+    const inputs = row.querySelectorAll('.tag-key, .tag-value');
+    inputs.forEach(input => {
+        input.addEventListener('input', updateGeneratedUrl);
+    });
+}
+
+function updateGeneratedUrl() {
+    const baseUrl = 'https://{{ request.get_host }}/edl/enis/';
+    const params = [];
+
+    document.querySelectorAll('.tag-filter-row').forEach(row => {
+        const key = row.querySelector('.tag-key').value.trim();
+        const value = row.querySelector('.tag-value').value.trim();
+        if (key && value) {
+            params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+    });
+
+    const generatedUrl = params.length > 0 ? baseUrl + '?' + params.join('&') : baseUrl;
+    document.getElementById('generatedUrl').value = generatedUrl;
+    document.getElementById('viewGeneratedUrl').href = generatedUrl;
+}
+
+// Initialize tag filter listeners on page load
+$(document).ready(function() {
+    document.querySelectorAll('.tag-filter-row').forEach(row => {
+        attachTagInputListeners(row);
+    });
+    updateGeneratedUrl();
+});
 </script>
 {% endblock %}
