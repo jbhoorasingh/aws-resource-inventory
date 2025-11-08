@@ -112,11 +112,11 @@
                                     <td>
                                         <span class="badge bg-primary me-1">{{ eni.private_ip_address }}</span>
                                         {% if eni.public_ip_address %}
-                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
+                                            <span class="badge bg-success me-1">{{ eni.public_ip_address }}</span>
                                         {% endif %}
-                                        {% if eni.secondary_ips.all %}
-                                            <br><small class="text-muted">+{{ eni.secondary_ips.count }} secondary</small>
-                                        {% endif %}
+                                        {% for secondary_ip in eni.secondary_ips.all %}
+                                            <span class="badge bg-info me-1">{{ secondary_ip.ip_address }}</span>
+                                        {% endfor %}
                                     </td>
                                     <td>
                                         <code>{{ eni.subnet.vpc.vpc_id }}</code>
