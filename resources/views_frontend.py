@@ -292,3 +292,36 @@ def ec2_instance_detail_view(request, instance_id):
     except EC2Instance.DoesNotExist:
         messages.error(request, 'EC2 instance not found.')
         return redirect('ec2_instances')
+
+
+def eni_detail_view(request, eni_id):
+    """Display detailed ENI information"""
+    try:
+        eni = ENI.objects.select_related(
+            'subnet__vpc', 'ec2_instance__vpc', 'ec2_instance__subnet'
+        ).prefetch_related(
+            'secondary_ips',
+            'eni_security_groups__security_group__rules'
+        ).get(id=eni_id)
+
+        # Get all security groups with their rules
+        security_groups = []
+        for eni_sg in eni.eni_security_groups.all():
+            sg = eni_sg.security_group
+            ingress_rules = sg.rules.filter(rule_type='ingress').order_by('protocol', 'from_port')
+            egress_rules = sg.rules.filter(rule_type='egress').order_by('protocol', 'from_port')
+            security_groups.append({
+                'security_group': sg,
+                'ingress_rules': ingress_rules,
+                'egress_rules': egress_rules,
+            })
+
+        context = {
+            'eni': eni,
+            'security_groups': security_groups,
+        }
+        return render(request, 'resources/eni_detail.html', context)
+
+    except ENI.DoesNotExist:
+        messages.error(request, 'ENI not found.')
+        return redirect('enis')
