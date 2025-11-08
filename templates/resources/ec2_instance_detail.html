@@ -17,51 +17,121 @@
 </div>
 
 <div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
+    <div class="col-md-8">
+        <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0">Instance Information</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <strong>Instance ID:</strong> <code>{{ instance.instance_id }}</code><br>
-                        <strong>Name:</strong> {{ instance.name|default:"No name" }}<br>
-                        <strong>Instance Type:</strong> <span class="badge bg-info">{{ instance.instance_type }}</span><br>
-                        <strong>State:</strong>
-                        {% if instance.state == 'running' %}
-                            <span class="badge bg-success">{{ instance.state }}</span>
-                        {% elif instance.state == 'stopped' %}
-                            <span class="badge bg-danger">{{ instance.state }}</span>
-                        {% else %}
-                            <span class="badge bg-warning">{{ instance.state }}</span>
-                        {% endif %}
-                        <br>
-                        <strong>Platform:</strong> {{ instance.platform|default:"linux" }}<br>
-                        <strong>Launch Time:</strong> {{ instance.launch_time|date:"Y-m-d H:i:s"|default:"-" }}
+                        <table class="table table-sm table-borderless">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted" style="width: 40%;">Instance ID:</td>
+                                    <td><code>{{ instance.instance_id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Name:</td>
+                                    <td>{{ instance.name|default:"No name" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Instance Type:</td>
+                                    <td><span class="badge bg-info">{{ instance.instance_type }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">State:</td>
+                                    <td>
+                                        {% if instance.state == 'running' %}
+                                            <span class="badge bg-success">{{ instance.state }}</span>
+                                        {% elif instance.state == 'stopped' %}
+                                            <span class="badge bg-danger">{{ instance.state }}</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ instance.state }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Platform:</td>
+                                    <td>{{ instance.platform|default:"linux" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Launch Time:</td>
+                                    <td>{{ instance.launch_time|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                     <div class="col-md-6">
-                        <strong>VPC:</strong> <code>{{ instance.vpc.vpc_id }}</code> ({{ instance.vpc.cidr_block }})<br>
-                        <strong>Subnet:</strong> <code>{{ instance.subnet.subnet_id }}</code> ({{ instance.subnet.cidr_block }})<br>
-                        <strong>Region:</strong> <span class="badge bg-secondary">{{ instance.region }}</span><br>
-                        <strong>Availability Zone:</strong> {{ instance.availability_zone }}<br>
-                        <strong>Private IP:</strong>
-                        {% if instance.private_ip_address %}
-                            <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
-                        {% else %}
-                            <span class="text-muted">-</span>
-                        {% endif %}
-                        <br>
-                        <strong>Public IP:</strong>
-                        {% if instance.public_ip_address %}
-                            <span class="badge bg-success">{{ instance.public_ip_address }}</span>
-                        {% else %}
-                            <span class="text-muted">-</span>
-                        {% endif %}
-                        <br>
-                        <strong>Owner Account:</strong> <code>{{ instance.owner_account }}</code>
+                        <table class="table table-sm table-borderless">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted" style="width: 40%;">VPC:</td>
+                                    <td><code>{{ instance.vpc.vpc_id }}</code><br><small class="text-muted">{{ instance.vpc.cidr_block }}</small></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Subnet:</td>
+                                    <td><code>{{ instance.subnet.subnet_id }}</code><br><small class="text-muted">{{ instance.subnet.cidr_block }}</small></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Region:</td>
+                                    <td><span class="badge bg-secondary">{{ instance.region }}</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Availability Zone:</td>
+                                    <td>{{ instance.availability_zone }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Private IP:</td>
+                                    <td>
+                                        {% if instance.private_ip_address %}
+                                            <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Public IP:</td>
+                                    <td>
+                                        {% if instance.public_ip_address %}
+                                            <span class="badge bg-success">{{ instance.public_ip_address }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Owner Account:</td>
+                                    <td><code>{{ instance.owner_account }}</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tags"></i> Tags</h5>
+            </div>
+            <div class="card-body">
+                {% if instance.tags %}
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for key, value in instance.tags.items %}
+                            <div class="badge bg-light text-dark border p-2" style="font-size: 0.85em;">
+                                <strong>{{ key }}:</strong> {{ value }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-tags fa-2x mb-2"></i>
+                        <p class="mb-0">No tags</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -71,70 +141,112 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Network Interfaces (ENIs)</h5>
+                <h5 class="mb-0"><i class="fas fa-network-wired"></i> Network Interfaces (ENIs)</h5>
             </div>
             <div class="card-body">
                 {% if enis %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>ENI ID</th>
-                                    <th>Name</th>
-                                    <th>Primary IP</th>
-                                    <th>Public IP</th>
-                                    <th>Secondary IPs</th>
-                                    <th>Security Groups</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for eni in enis %}
-                                <tr>
-                                    <td><code>{{ eni.eni_id }}</code></td>
-                                    <td>{{ eni.name|default:"No name" }}</td>
-                                    <td><span class="badge bg-primary">{{ eni.private_ip_address }}</span></td>
-                                    <td>
-                                        {% if eni.public_ip_address %}
-                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
+                    {% for eni in enis %}
+                    <div class="card mb-3 border">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ eni.name|default:"No name" }}</strong>
+                                    <code class="ms-2">{{ eni.eni_id }}</code>
+                                    {% if eni.status == 'available' %}
+                                        <span class="badge bg-success ms-2">{{ eni.status }}</span>
+                                    {% elif eni.status == 'in-use' %}
+                                        <span class="badge bg-warning text-dark ms-2">{{ eni.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary ms-2">{{ eni.status }}</span>
+                                    {% endif %}
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#eni-{{ forloop.counter }}" aria-expanded="false">
+                                    <i class="fas fa-chevron-down"></i> Details
+                                </button>
+                            </div>
+                        </div>
+                        <div class="collapse" id="eni-{{ forloop.counter }}">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <table class="table table-sm table-borderless">
+                                            <tbody>
+                                                <tr>
+                                                    <td class="text-muted" style="width: 40%;">Primary IP:</td>
+                                                    <td><span class="badge bg-primary">{{ eni.private_ip_address }}</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="text-muted">Public IP:</td>
+                                                    <td>
+                                                        {% if eni.public_ip_address %}
+                                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
+                                                        {% else %}
+                                                            <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="text-muted">Secondary IPs:</td>
+                                                    <td>
+                                                        {% for secondary_ip in eni.secondary_ips.all %}
+                                                            <span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
+                                                        {% empty %}
+                                                            <span class="text-muted">None</span>
+                                                        {% endfor %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="text-muted">Interface Type:</td>
+                                                    <td>{{ eni.interface_type|default:"interface" }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="text-muted">MAC Address:</td>
+                                                    <td><code>{{ eni.mac_address }}</code></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <strong class="text-muted">Security Groups:</strong>
+                                            <div class="mt-2">
+                                                {% for sg in eni.eni_security_groups.all %}
+                                                    <div class="mb-2">
+                                                        <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
+                                                            <span class="badge bg-secondary p-2">
+                                                                <i class="fas fa-shield-alt"></i> {{ sg.security_group.name }}
+                                                            </span>
+                                                        </a>
+                                                        <br><small class="text-muted ms-2"><code>{{ sg.security_group.sg_id }}</code></small>
+                                                    </div>
+                                                {% empty %}
+                                                    <span class="text-muted">No security groups</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% if eni.tags %}
+                                        <div>
+                                            <strong class="text-muted">Tags:</strong>
+                                            <div class="mt-2">
+                                                {% for key, value in eni.tags.items %}
+                                                    <span class="badge bg-light text-dark border me-1 mb-1" style="font-size: 0.75em;">
+                                                        <strong>{{ key }}:</strong> {{ value }}
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        {% for secondary_ip in eni.secondary_ips.all %}
-                                            <span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
-                                        {% empty %}
-                                            <span class="text-muted">None</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td>
-                                        {% for sg in eni.eni_security_groups.all %}
-                                            <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
-                                                <span class="badge bg-secondary">{{ sg.security_group.name }}</span>
-                                            </a>
-                                        {% empty %}
-                                            <span class="text-muted">None</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td>
-                                        {% if eni.status == 'available' %}
-                                            <span class="badge bg-success">{{ eni.status }}</span>
-                                        {% elif eni.status == 'in-use' %}
-                                            <span class="badge bg-warning">{{ eni.status }}</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">{{ eni.status }}</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                    {% endfor %}
                 {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-network-wired fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">No ENIs are currently attached to this instance.</p>
+                    <div class="text-center py-5">
+                        <i class="fas fa-network-wired fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No ENIs attached</h5>
+                        <p class="text-muted mb-0">No network interfaces are currently attached to this instance.</p>
                     </div>
                 {% endif %}
             </div>
