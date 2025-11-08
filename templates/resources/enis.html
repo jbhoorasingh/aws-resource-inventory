@@ -88,118 +88,86 @@
             <div class="card-body">
                 {% if enis %}
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="enisTable">
+                        <table class="table table-hover table-sm" id="enisTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 15%;">ENI</th>
-                                    <th style="width: 15%;">IP Addresses</th>
-                                    <th style="width: 12%;">VPC / Subnet</th>
-                                    <th style="width: 18%;">EC2 Instance</th>
-                                    <th style="width: 15%;">Security Groups</th>
-                                    <th style="width: 15%;">Tags</th>
-                                    <th style="width: 10%;">Status</th>
+                                    <th>ENI ID</th>
+                                    <th>IP Addresses</th>
+                                    <th>VPC / Subnet</th>
+                                    <th>EC2 Instance</th>
+                                    <th>Security Groups</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for eni in enis %}
-                                <tr>
+                                <tr data-tags='{{ eni.tags|safe }}'>
                                     <td>
-                                        <strong><code>{{ eni.eni_id }}</code></strong>
+                                        <code>{{ eni.eni_id }}</code>
                                         {% if eni.name %}
                                             <br><small class="text-muted">{{ eni.name }}</small>
                                         {% endif %}
-                                        <br><small class="text-muted"><code>{{ eni.owner_account }}</code></small>
                                     </td>
                                     <td>
-                                        <div class="mb-1">
-                                            <i class="fas fa-lock text-muted" style="font-size: 0.7em;"></i>
-                                            <span class="badge bg-primary">{{ eni.private_ip_address }}</span>
-                                        </div>
+                                        <span class="badge bg-primary me-1">{{ eni.private_ip_address }}</span>
                                         {% if eni.public_ip_address %}
-                                            <div class="mb-1">
-                                                <i class="fas fa-globe text-muted" style="font-size: 0.7em;"></i>
-                                                <span class="badge bg-success">{{ eni.public_ip_address }}</span>
-                                            </div>
+                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
                                         {% endif %}
-                                        {% for secondary_ip in eni.secondary_ips.all %}
-                                            <div>
-                                                <i class="fas fa-plus text-muted" style="font-size: 0.6em;"></i>
-                                                <span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
-                                            </div>
-                                        {% endfor %}
+                                        {% if eni.secondary_ips.all %}
+                                            <br><small class="text-muted">+{{ eni.secondary_ips.count }} secondary</small>
+                                        {% endif %}
                                     </td>
                                     <td>
-                                        <small class="text-muted">VPC:</small> <code style="font-size: 0.85em;">{{ eni.subnet.vpc.vpc_id }}</code>
-                                        <br><small class="text-muted">Subnet:</small> <code style="font-size: 0.85em;">{{ eni.subnet.subnet_id }}</code>
-                                        <br><small class="text-muted">{{ eni.subnet.availability_zone }}</small>
+                                        <code>{{ eni.subnet.vpc.vpc_id }}</code>
+                                        <br><code class="text-muted" style="font-size: 0.85em;">{{ eni.subnet.subnet_id }}</code>
                                     </td>
                                     <td>
                                         {% if eni.ec2_instance %}
-                                            <a href="{% url 'ec2_instance_detail' eni.ec2_instance.id %}" class="text-decoration-none fw-bold">
+                                            <a href="{% url 'ec2_instance_detail' eni.ec2_instance.id %}" class="text-decoration-none">
                                                 {{ eni.ec2_instance.name|default:eni.ec2_instance.instance_id }}
                                             </a>
-                                            <br><small><code class="text-muted">{{ eni.ec2_instance.instance_id }}</code></small>
-                                            <br><span class="badge bg-info" style="font-size: 0.75em;">{{ eni.ec2_instance.instance_type }}</span>
+                                            <br>
                                             {% if eni.ec2_instance.state == 'running' %}
-                                                <span class="badge bg-success" style="font-size: 0.75em;">
-                                                    <i class="fas fa-circle" style="font-size: 0.5em;"></i> {{ eni.ec2_instance.state }}
-                                                </span>
+                                                <span class="badge bg-success" style="font-size: 0.7em;">running</span>
                                             {% elif eni.ec2_instance.state == 'stopped' %}
-                                                <span class="badge bg-danger" style="font-size: 0.75em;">
-                                                    <i class="fas fa-circle" style="font-size: 0.5em;"></i> {{ eni.ec2_instance.state }}
-                                                </span>
+                                                <span class="badge bg-danger" style="font-size: 0.7em;">stopped</span>
                                             {% else %}
-                                                <span class="badge bg-warning text-dark" style="font-size: 0.75em;">{{ eni.ec2_instance.state }}</span>
+                                                <span class="badge bg-warning text-dark" style="font-size: 0.7em;">{{ eni.ec2_instance.state }}</span>
                                             {% endif %}
+                                            <span class="badge bg-info" style="font-size: 0.7em;">{{ eni.ec2_instance.instance_type }}</span>
                                         {% elif eni.attached_resource_id %}
                                             <small class="text-muted">{{ eni.attached_resource_type }}</small>
-                                            <br><small><code class="text-muted">{{ eni.attached_resource_id }}</code></small>
-                                        {% else %}
-                                            <span class="text-muted">Not attached</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% for sg in eni.eni_security_groups.all %}
-                                            <div class="mb-1">
-                                                <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
-                                                    <span class="badge bg-secondary" style="font-size: 0.8em;">
-                                                        <i class="fas fa-shield-alt"></i> {{ sg.security_group.name }}
-                                                    </span>
-                                                </a>
-                                            </div>
-                                        {% empty %}
-                                            <span class="text-muted">None</span>
-                                        {% endfor %}
-                                    </td>
-                                    <td data-tags='{{ eni.tags|safe }}'>
-                                        {% if eni.tags %}
-                                            <div class="d-flex flex-wrap gap-1">
-                                                {% for key, value in eni.tags.items %}
-                                                    {% if forloop.counter <= 2 %}
-                                                        <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
-                                                            <strong>{{ key }}:</strong> {{ value }}
-                                                        </span>
-                                                    {% endif %}
-                                                {% endfor %}
-                                                {% if eni.tags|length > 2 %}
-                                                    <span class="badge bg-secondary" style="font-size: 0.7em;">+{{ eni.tags|length|add:"-2" }}</span>
-                                                {% endif %}
-                                            </div>
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% for sg in eni.eni_security_groups.all %}
+                                            <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
+                                                <span class="badge bg-secondary me-1 mb-1" style="font-size: 0.75em;">{{ sg.security_group.name }}</span>
+                                            </a>
+                                        {% empty %}
+                                            <span class="text-muted">-</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
                                         {% if eni.status == 'available' %}
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-circle" style="font-size: 0.5em;"></i> available
-                                            </span>
+                                            <span class="badge bg-success">available</span>
                                         {% elif eni.status == 'in-use' %}
-                                            <span class="badge bg-warning text-dark">
-                                                <i class="fas fa-circle" style="font-size: 0.5em;"></i> in-use
-                                            </span>
+                                            <span class="badge bg-warning text-dark">in-use</span>
                                         {% else %}
                                             <span class="badge bg-secondary">{{ eni.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'eni_detail' eni.id %}" class="btn btn-sm btn-outline-primary me-1">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if eni.tags %}
+                                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#tagsModal{{ eni.id }}">
+                                                <i class="fas fa-tags"></i>
+                                            </button>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -207,6 +175,42 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Tags Modals -->
+                    {% for eni in enis %}
+                    {% if eni.tags %}
+                    <div class="modal fade" id="tagsModal{{ eni.id }}" tabindex="-1" aria-labelledby="tagsModalLabel{{ eni.id }}" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="tagsModalLabel{{ eni.id }}">
+                                        <i class="fas fa-tags"></i> Tags - {{ eni.eni_id }}
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Key</th>
+                                                <th>Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for key, value in eni.tags.items %}
+                                            <tr>
+                                                <td><strong>{{ key }}</strong></td>
+                                                <td>{{ value }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
                 {% else %}
                     <div class="text-center py-5">
                         <i class="fas fa-network-wired fa-3x text-muted mb-3"></i>

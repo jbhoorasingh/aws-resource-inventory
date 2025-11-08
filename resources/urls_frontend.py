@@ -8,6 +8,7 @@ urlpatterns = [
     path('', views_frontend.accounts_view, name='accounts'),
     path('accounts/', views_frontend.accounts_view, name='accounts'),
     path('enis/', views_frontend.enis_view, name='enis'),
+    path('enis/<int:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
     path('ec2-instances/', views_frontend.ec2_instances_view, name='ec2_instances'),
     path('ec2-instances/<int:instance_id>/', views_frontend.ec2_instance_detail_view, name='ec2_instance_detail'),
     path('security-groups/', views_frontend.security_groups_view, name='security_groups'),
