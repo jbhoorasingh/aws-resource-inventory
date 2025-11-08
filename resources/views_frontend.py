@@ -277,15 +277,34 @@ def ec2_instance_detail_view(request, instance_id):
         instance = EC2Instance.objects.select_related(
             'vpc', 'subnet'
         ).prefetch_related(
-            'enis__secondary_ips', 'enis__eni_security_groups__security_group'
+            'enis__secondary_ips',
+            'enis__eni_security_groups__security_group__rules'
         ).get(id=instance_id)
 
-        # Get all ENIs for this instance
+        # Get all ENIs for this instance with their security groups and rules
         enis = instance.enis.all()
+
+        # Organize security groups with rules for each ENI
+        enis_with_sgs = []
+        for eni in enis:
+            security_groups = []
+            for eni_sg in eni.eni_security_groups.all():
+                sg = eni_sg.security_group
+                ingress_rules = sg.rules.filter(rule_type='ingress').order_by('protocol', 'from_port')
+                egress_rules = sg.rules.filter(rule_type='egress').order_by('protocol', 'from_port')
+                security_groups.append({
+                    'security_group': sg,
+                    'ingress_rules': ingress_rules,
+                    'egress_rules': egress_rules,
+                })
+            enis_with_sgs.append({
+                'eni': eni,
+                'security_groups': security_groups,
+            })
 
         context = {
             'instance': instance,
-            'enis': enis,
+            'enis_with_sgs': enis_with_sgs,
         }
         return render(request, 'resources/ec2_instance_detail.html', context)
 

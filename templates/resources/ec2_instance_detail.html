@@ -144,20 +144,20 @@
                 <h5 class="mb-0"><i class="fas fa-network-wired"></i> Network Interfaces (ENIs)</h5>
             </div>
             <div class="card-body">
-                {% if enis %}
-                    {% for eni in enis %}
+                {% if enis_with_sgs %}
+                    {% for eni_data in enis_with_sgs %}
                     <div class="card mb-3 border">
                         <div class="card-header bg-light">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <strong>{{ eni.name|default:"No name" }}</strong>
-                                    <code class="ms-2">{{ eni.eni_id }}</code>
-                                    {% if eni.status == 'available' %}
-                                        <span class="badge bg-success ms-2">{{ eni.status }}</span>
-                                    {% elif eni.status == 'in-use' %}
-                                        <span class="badge bg-warning text-dark ms-2">{{ eni.status }}</span>
+                                    <strong>{{ eni_data.eni.name|default:"No name" }}</strong>
+                                    <code class="ms-2">{{ eni_data.eni.eni_id }}</code>
+                                    {% if eni_data.eni.status == 'available' %}
+                                        <span class="badge bg-success ms-2">{{ eni_data.eni.status }}</span>
+                                    {% elif eni_data.eni.status == 'in-use' %}
+                                        <span class="badge bg-warning text-dark ms-2">{{ eni_data.eni.status }}</span>
                                     {% else %}
-                                        <span class="badge bg-secondary ms-2">{{ eni.status }}</span>
+                                        <span class="badge bg-secondary ms-2">{{ eni_data.eni.status }}</span>
                                     {% endif %}
                                 </div>
                                 <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#eni-{{ forloop.counter }}" aria-expanded="false">
@@ -167,19 +167,20 @@
                         </div>
                         <div class="collapse" id="eni-{{ forloop.counter }}">
                             <div class="card-body">
-                                <div class="row">
+                                <div class="row mb-3">
                                     <div class="col-md-6">
+                                        <h6 class="text-muted">Network Information</h6>
                                         <table class="table table-sm table-borderless">
                                             <tbody>
                                                 <tr>
                                                     <td class="text-muted" style="width: 40%;">Primary IP:</td>
-                                                    <td><span class="badge bg-primary">{{ eni.private_ip_address }}</span></td>
+                                                    <td><span class="badge bg-primary">{{ eni_data.eni.private_ip_address }}</span></td>
                                                 </tr>
                                                 <tr>
                                                     <td class="text-muted">Public IP:</td>
                                                     <td>
-                                                        {% if eni.public_ip_address %}
-                                                            <span class="badge bg-success">{{ eni.public_ip_address }}</span>
+                                                        {% if eni_data.eni.public_ip_address %}
+                                                            <span class="badge bg-success">{{ eni_data.eni.public_ip_address }}</span>
                                                         {% else %}
                                                             <span class="text-muted">-</span>
                                                         {% endif %}
@@ -188,7 +189,7 @@
                                                 <tr>
                                                     <td class="text-muted">Secondary IPs:</td>
                                                     <td>
-                                                        {% for secondary_ip in eni.secondary_ips.all %}
+                                                        {% for secondary_ip in eni_data.eni.secondary_ips.all %}
                                                             <span class="badge bg-info">{{ secondary_ip.ip_address }}</span>
                                                         {% empty %}
                                                             <span class="text-muted">None</span>
@@ -197,47 +198,126 @@
                                                 </tr>
                                                 <tr>
                                                     <td class="text-muted">Interface Type:</td>
-                                                    <td>{{ eni.interface_type|default:"interface" }}</td>
+                                                    <td>{{ eni_data.eni.interface_type|default:"interface" }}</td>
                                                 </tr>
                                                 <tr>
                                                     <td class="text-muted">MAC Address:</td>
-                                                    <td><code>{{ eni.mac_address }}</code></td>
+                                                    <td><code>{{ eni_data.eni.mac_address }}</code></td>
                                                 </tr>
                                             </tbody>
                                         </table>
                                     </div>
                                     <div class="col-md-6">
+                                        {% if eni_data.eni.tags %}
+                                        <h6 class="text-muted">Tags</h6>
                                         <div class="mb-3">
-                                            <strong class="text-muted">Security Groups:</strong>
-                                            <div class="mt-2">
-                                                {% for sg in eni.eni_security_groups.all %}
-                                                    <div class="mb-2">
-                                                        <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-decoration-none">
-                                                            <span class="badge bg-secondary p-2">
-                                                                <i class="fas fa-shield-alt"></i> {{ sg.security_group.name }}
-                                                            </span>
-                                                        </a>
-                                                        <br><small class="text-muted ms-2"><code>{{ sg.security_group.sg_id }}</code></small>
-                                                    </div>
-                                                {% empty %}
-                                                    <span class="text-muted">No security groups</span>
-                                                {% endfor %}
-                                            </div>
-                                        </div>
-                                        {% if eni.tags %}
-                                        <div>
-                                            <strong class="text-muted">Tags:</strong>
-                                            <div class="mt-2">
-                                                {% for key, value in eni.tags.items %}
-                                                    <span class="badge bg-light text-dark border me-1 mb-1" style="font-size: 0.75em;">
-                                                        <strong>{{ key }}:</strong> {{ value }}
-                                                    </span>
-                                                {% endfor %}
-                                            </div>
+                                            {% for key, value in eni_data.eni.tags.items %}
+                                                <span class="badge bg-light text-dark border me-1 mb-1" style="font-size: 0.75em;">
+                                                    <strong>{{ key }}:</strong> {{ value }}
+                                                </span>
+                                            {% endfor %}
                                         </div>
                                         {% endif %}
                                     </div>
                                 </div>
+
+                                <!-- Security Groups with Rules -->
+                                {% if eni_data.security_groups %}
+                                <div class="row">
+                                    <div class="col-12">
+                                        <h6 class="text-muted"><i class="fas fa-shield-alt"></i> Security Groups & Rules</h6>
+                                        {% for sg_data in eni_data.security_groups %}
+                                        <div class="card mb-2 border-secondary">
+                                            <div class="card-header bg-secondary text-white py-2">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong>{{ sg_data.security_group.name }}</strong>
+                                                        <code class="text-white ms-2">{{ sg_data.security_group.sg_id }}</code>
+                                                    </div>
+                                                    <a href="{% url 'security_group_detail' sg_data.security_group.id %}" class="btn btn-sm btn-light">
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <div class="card-body p-2">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong class="text-success"><i class="fas fa-arrow-down"></i> Inbound ({{ sg_data.ingress_rules|length }})</strong>
+                                                        {% if sg_data.ingress_rules %}
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-bordered mb-0" style="font-size: 0.85em;">
+                                                                <thead class="table-light">
+                                                                    <tr>
+                                                                        <th>Protocol</th>
+                                                                        <th>Port</th>
+                                                                        <th>Source</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for rule in sg_data.ingress_rules %}
+                                                                    <tr>
+                                                                        <td>{{ rule.protocol|upper }}</td>
+                                                                        <td>
+                                                                            {% if rule.from_port == rule.to_port %}
+                                                                                {{ rule.from_port }}
+                                                                            {% elif rule.from_port == -1 %}
+                                                                                All
+                                                                            {% else %}
+                                                                                {{ rule.from_port }}-{{ rule.to_port }}
+                                                                            {% endif %}
+                                                                        </td>
+                                                                        <td><small><code>{{ rule.source_value }}</code></small></td>
+                                                                    </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                        {% else %}
+                                                        <p class="text-muted small mb-0">None</p>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <strong class="text-info"><i class="fas fa-arrow-up"></i> Outbound ({{ sg_data.egress_rules|length }})</strong>
+                                                        {% if sg_data.egress_rules %}
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-bordered mb-0" style="font-size: 0.85em;">
+                                                                <thead class="table-light">
+                                                                    <tr>
+                                                                        <th>Protocol</th>
+                                                                        <th>Port</th>
+                                                                        <th>Destination</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for rule in sg_data.egress_rules %}
+                                                                    <tr>
+                                                                        <td>{{ rule.protocol|upper }}</td>
+                                                                        <td>
+                                                                            {% if rule.from_port == rule.to_port %}
+                                                                                {{ rule.from_port }}
+                                                                            {% elif rule.from_port == -1 %}
+                                                                                All
+                                                                            {% else %}
+                                                                                {{ rule.from_port }}-{{ rule.to_port }}
+                                                                            {% endif %}
+                                                                        </td>
+                                                                        <td><small><code>{{ rule.source_value }}</code></small></td>
+                                                                    </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                        {% else %}
+                                                        <p class="text-muted small mb-0">None</p>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
