@@ -160,14 +160,15 @@
                                         {% if instance.tags %}
                                             <div class="d-flex flex-wrap gap-1">
                                                 {% for key, value in instance.tags.items %}
-                                                    <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
-                                                        <strong>{{ key }}:</strong> {{ value }}
-                                                    </span>
-                                                    {% if forloop.counter == 2 and instance.tags|length > 2 %}
-                                                        <span class="badge bg-secondary" style="font-size: 0.7em;">+{{ instance.tags|length|add:"-2" }}</span>
-                                                        {% break %}
+                                                    {% if forloop.counter <= 2 %}
+                                                        <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
+                                                            <strong>{{ key }}:</strong> {{ value }}
+                                                        </span>
                                                     {% endif %}
                                                 {% endfor %}
+                                                {% if instance.tags|length > 2 %}
+                                                    <span class="badge bg-secondary" style="font-size: 0.7em;">+{{ instance.tags|length|add:"-2" }}</span>
+                                                {% endif %}
                                             </div>
                                         {% else %}
                                             <span class="text-muted">-</span>
