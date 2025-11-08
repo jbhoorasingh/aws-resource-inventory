@@ -88,85 +88,94 @@
             <div class="card-body">
                 {% if instances %}
                     <div class="table-responsive">
-                        <table class="table table-hover" id="instancesTable">
+                        <table class="table table-hover align-middle" id="instancesTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Instance</th>
-                                    <th>Type</th>
-                                    <th>State</th>
-                                    <th>IP Addresses</th>
-                                    <th>VPC / Subnet</th>
-                                    <th>Region / AZ</th>
-                                    <th>Launch Time</th>
-                                    <th>Tags</th>
-                                    <th>Actions</th>
+                                    <th style="width: 20%;">Instance</th>
+                                    <th style="width: 10%;">Type / State</th>
+                                    <th style="width: 15%;">IP Addresses</th>
+                                    <th style="width: 15%;">VPC / Subnet</th>
+                                    <th style="width: 10%;">Region</th>
+                                    <th style="width: 20%;">Tags</th>
+                                    <th style="width: 10%;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for instance in instances %}
                                 <tr>
                                     <td>
-                                        <div>
-                                            <a href="{% url 'ec2_instance_detail' instance.id %}" class="text-decoration-none">
-                                                <strong>{{ instance.name|default:instance.instance_id }}</strong>
-                                            </a>
-                                            <br><code>{{ instance.instance_id }}</code>
-                                            {% if instance.platform %}
-                                                <br><small class="text-muted">{{ instance.platform }}</small>
-                                            {% endif %}
-                                        </div>
+                                        <a href="{% url 'ec2_instance_detail' instance.id %}" class="text-decoration-none fw-bold">
+                                            {{ instance.name|default:instance.instance_id }}
+                                        </a>
+                                        <br><small><code class="text-muted">{{ instance.instance_id }}</code></small>
+                                        {% if instance.platform %}
+                                            <br><small class="text-muted"><i class="fab fa-{{ instance.platform|lower }}"></i> {{ instance.platform }}</small>
+                                        {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">{{ instance.instance_type }}</span>
-                                    </td>
-                                    <td>
+                                        <span class="badge bg-info mb-1">{{ instance.instance_type }}</span>
+                                        <br>
                                         {% if instance.state == 'running' %}
-                                            <span class="badge bg-success">{{ instance.state }}</span>
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-circle" style="font-size: 0.5em;"></i> {{ instance.state }}
+                                            </span>
                                         {% elif instance.state == 'stopped' %}
-                                            <span class="badge bg-danger">{{ instance.state }}</span>
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-circle" style="font-size: 0.5em;"></i> {{ instance.state }}
+                                            </span>
                                         {% elif instance.state == 'stopping' or instance.state == 'starting' %}
-                                            <span class="badge bg-warning">{{ instance.state }}</span>
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="fas fa-circle" style="font-size: 0.5em;"></i> {{ instance.state }}
+                                            </span>
                                         {% else %}
                                             <span class="badge bg-secondary">{{ instance.state }}</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if instance.private_ip_address %}
-                                            <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
+                                            <div class="mb-1">
+                                                <i class="fas fa-lock text-muted" style="font-size: 0.7em;"></i>
+                                                <span class="badge bg-primary">{{ instance.private_ip_address }}</span>
+                                            </div>
                                         {% endif %}
                                         {% if instance.public_ip_address %}
-                                            <br><span class="badge bg-success">{{ instance.public_ip_address }}</span>
+                                            <div>
+                                                <i class="fas fa-globe text-muted" style="font-size: 0.7em;"></i>
+                                                <span class="badge bg-success">{{ instance.public_ip_address }}</span>
+                                            </div>
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        <code>{{ instance.vpc.vpc_id }}</code>
-                                        <br><code>{{ instance.subnet.subnet_id }}</code>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-secondary">{{ instance.region }}</span>
-                                        <br><small class="text-muted">{{ instance.availability_zone }}</small>
-                                    </td>
-                                    <td>
-                                        {% if instance.launch_time %}
-                                            <small>{{ instance.launch_time|date:"Y-m-d H:i" }}</small>
-                                        {% else %}
+                                        {% if not instance.private_ip_address and not instance.public_ip_address %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
+                                    <td>
+                                        <small class="text-muted">VPC:</small> <code style="font-size: 0.85em;">{{ instance.vpc.vpc_id }}</code>
+                                        <br><small class="text-muted">Subnet:</small> <code style="font-size: 0.85em;">{{ instance.subnet.subnet_id }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary mb-1">{{ instance.region }}</span>
+                                        <br><small class="text-muted">{{ instance.availability_zone }}</small>
+                                    </td>
                                     <td data-tags='{{ instance.tags|safe }}'>
                                         {% if instance.tags %}
-                                            {% for key, value in instance.tags.items %}
-                                                <span class="badge bg-light text-dark border mb-1" style="font-size: 0.7em;">
-                                                    <strong>{{ key }}:</strong> {{ value }}
-                                                </span>
-                                            {% endfor %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for key, value in instance.tags.items %}
+                                                    <span class="badge bg-light text-dark border" style="font-size: 0.7em;">
+                                                        <strong>{{ key }}:</strong> {{ value }}
+                                                    </span>
+                                                    {% if forloop.counter == 2 and instance.tags|length > 2 %}
+                                                        <span class="badge bg-secondary" style="font-size: 0.7em;">+{{ instance.tags|length|add:"-2" }}</span>
+                                                        {% break %}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         <a href="{% url 'ec2_instance_detail' instance.id %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye"></i> View Details
+                                            <i class="fas fa-eye"></i> Details
                                         </a>
                                     </td>
                                 </tr>
