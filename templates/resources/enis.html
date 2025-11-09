@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load json_filters %}
 
 {% block title %}ENIs - AWS Resource Inventory{% endblock %}
 
@@ -102,7 +103,7 @@
                             </thead>
                             <tbody>
                                 {% for eni in enis %}
-                                <tr data-tags='{{ eni.tags|safe }}'>
+                                <tr data-tags='{{ eni.tags|to_json }}'>
                                     <td>
                                         <code>{{ eni.eni_id }}</code>
                                         {% if eni.name %}
@@ -245,7 +246,7 @@ $(document).ready(function() {
             const tagsData = row.attr('data-tags');
 
             try {
-                const tags = tagsData ? JSON.parse(tagsData.replace(/'/g, '"')) : {};
+                const tags = tagsData ? JSON.parse(tagsData) : {};
                 let shouldShow = false;
 
                 if (tagKey && tagValue) {
