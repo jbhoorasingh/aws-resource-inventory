@@ -242,7 +242,7 @@ $(document).ready(function() {
 
         $('#enisTable tbody tr').each(function() {
             const row = $(this);
-            const tagsData = row.find('td[data-tags]').attr('data-tags');
+            const tagsData = row.attr('data-tags');
 
             try {
                 const tags = tagsData ? JSON.parse(tagsData.replace(/'/g, '"')) : {};
