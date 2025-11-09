@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load json_filters %}
 
 {% block title %}EC2 Instances - AWS Resource Inventory{% endblock %}
 
@@ -102,7 +103,7 @@
                             </thead>
                             <tbody>
                                 {% for instance in instances %}
-                                <tr>
+                                <tr data-tags='{{ instance.tags|to_json }}'>
                                     <td>
                                         <a href="{% url 'ec2_instance_detail' instance.id %}" class="text-decoration-none fw-bold">
                                             {{ instance.name|default:instance.instance_id }}
@@ -156,7 +157,7 @@
                                         <span class="badge bg-secondary mb-1">{{ instance.region }}</span>
                                         <br><small class="text-muted">{{ instance.availability_zone }}</small>
                                     </td>
-                                    <td data-tags='{{ instance.tags|safe }}'>
+                                    <td>
                                         {% if instance.tags %}
                                             <div class="d-flex flex-wrap gap-1">
                                                 {% for key, value in instance.tags.items %}
@@ -218,7 +219,7 @@ $(document).ready(function() {
             const tagsData = row.attr('data-tags');
 
             try {
-                const tags = tagsData ? JSON.parse(tagsData.replace(/'/g, '"')) : {};
+                const tags = tagsData ? JSON.parse(tagsData) : {};
                 let shouldShow = false;
 
                 if (tagKey && tagValue) {
