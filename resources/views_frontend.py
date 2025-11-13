@@ -141,7 +141,144 @@ def poll_account_view(request):
     
     except Exception as e:
         messages.error(request, f'An error occurred: {str(e)}')
-    
+
+    return redirect('accounts')
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_poll_accounts_view(request):
+    """Handle bulk account polling requests with role assumption"""
+    try:
+        # Get shared credentials
+        access_key_id = request.POST.get('access_key_id')
+        secret_access_key = request.POST.get('secret_access_key')
+        session_token = request.POST.get('session_token', '')
+        regions = request.POST.get('regions', 'us-east-1,us-west-2')
+        accounts_config = request.POST.get('accounts_config', '')
+
+        # Validate required fields
+        if not all([access_key_id, secret_access_key, accounts_config]):
+            messages.error(request, 'Access key, secret key, and accounts configuration are required.')
+            return redirect('accounts')
+
+        # Parse regions
+        region_list = [r.strip() for r in regions.split(',') if r.strip()]
+        if not region_list:
+            messages.error(request, 'At least one region must be specified.')
+            return redirect('accounts')
+
+        # Parse accounts configuration
+        # Format: account_number|account_name|role_arn|external_id (one per line)
+        accounts = []
+        for line_num, line in enumerate(accounts_config.strip().split('\n'), 1):
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = [p.strip() for p in line.split('|')]
+            if len(parts) < 3:
+                messages.error(
+                    request,
+                    f'Line {line_num}: Invalid format. Expected: account_number|account_name|role_arn|external_id'
+                )
+                return redirect('accounts')
+
+            account_config = {
+                'account_number': parts[0],
+                'account_name': parts[1] if len(parts) > 1 else '',
+                'role_arn': parts[2] if len(parts) > 2 else '',
+                'external_id': parts[3] if len(parts) > 3 else ''
+            }
+            accounts.append(account_config)
+
+        if not accounts:
+            messages.error(request, 'No valid accounts found in configuration.')
+            return redirect('accounts')
+
+        # Poll each account
+        total_accounts = len(accounts)
+        successful = 0
+        failed = 0
+        results = []
+
+        for idx, account_config in enumerate(accounts, 1):
+            account_number = account_config['account_number']
+            account_name = account_config['account_name']
+            role_arn = account_config['role_arn']
+            external_id = account_config['external_id']
+
+            try:
+                # Build command
+                cmd = [
+                    'python', 'manage.py', 'discover_aws_resources',
+                    account_number,
+                    access_key_id,
+                    secret_access_key,
+                    session_token
+                ] + region_list
+
+                if account_name:
+                    cmd.extend(['--account-name', account_name])
+
+                if role_arn:
+                    cmd.extend(['--role-arn', role_arn])
+
+                if external_id:
+                    cmd.extend(['--external-id', external_id])
+
+                # Execute the command
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd='.',
+                    timeout=300  # 5 minute timeout per account
+                )
+
+                if result.returncode == 0:
+                    successful += 1
+                    results.append(f'✓ Account {account_number} ({account_name}): Success')
+                else:
+                    failed += 1
+                    error_msg = result.stderr[:200] if result.stderr else 'Unknown error'
+                    results.append(f'✗ Account {account_number} ({account_name}): Failed - {error_msg}')
+
+            except subprocess.TimeoutExpired:
+                failed += 1
+                results.append(f'✗ Account {account_number} ({account_name}): Timeout after 5 minutes')
+            except Exception as e:
+                failed += 1
+                results.append(f'✗ Account {account_number} ({account_name}): Error - {str(e)}')
+
+        # Show summary message
+        if successful == total_accounts:
+            messages.success(
+                request,
+                f'Successfully polled all {total_accounts} accounts! '
+                f'Discovered resources in regions: {", ".join(region_list)}'
+            )
+        elif successful > 0:
+            messages.warning(
+                request,
+                f'Bulk polling completed: {successful} succeeded, {failed} failed out of {total_accounts} accounts.'
+            )
+        else:
+            messages.error(
+                request,
+                f'All {total_accounts} accounts failed to poll. Check your credentials and role configuration.'
+            )
+
+        # Show detailed results
+        for result_msg in results:
+            if result_msg.startswith('✓'):
+                messages.success(request, result_msg)
+            else:
+                messages.error(request, result_msg)
+
+    except Exception as e:
+        messages.error(request, f'Bulk polling error: {str(e)}')
+
     return redirect('accounts')
 
 
