@@ -5,10 +5,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from resources.services import AWSResourceDiscovery
 from resources.models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, ENI, 
+    AWSAccount, VPC, Subnet, SecurityGroup, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
 from django.db import transaction
+from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,16 @@ class Command(BaseCommand):
             action='store_true',
             help='Show what would be discovered without saving to database'
         )
+        parser.add_argument(
+            '--role-arn',
+            type=str,
+            help='IAM Role ARN to assume for discovering resources (optional)'
+        )
+        parser.add_argument(
+            '--external-id',
+            type=str,
+            help='External ID for role assumption (optional, used with --role-arn)'
+        )
 
     def handle(self, *args, **options):
         account_number = options['account_number']
@@ -62,25 +73,58 @@ class Command(BaseCommand):
         session_token = options['session_token']
         account_name = options.get('account_name')
         dry_run = options['dry_run']
+        role_arn = options.get('role_arn')
+        external_id = options.get('external_id')
+
+        # Log start of discovery
+        logger.info(f"="*80)
+        logger.info(f"Starting AWS resource discovery")
+        logger.info(f"Target Account: {account_number} ({account_name or 'No name'})")
+        logger.info(f"Regions: {', '.join(regions)}")
+        logger.info(f"Authentication Method: {'Role Assumption' if role_arn else 'Direct Credentials'}")
+        if role_arn:
+            logger.info(f"Role ARN: {role_arn}")
+            if external_id:
+                logger.info(f"External ID: {'*' * len(external_id)} (hidden)")
+        logger.info(f"Timestamp: {timezone.now().isoformat()}")
+        logger.info(f"="*80)
 
         self.stdout.write(
             self.style.SUCCESS(f'Starting AWS resource discovery for account {account_number} in regions: {", ".join(regions)}')
         )
+
+        if role_arn:
+            self.stdout.write(f'Using role assumption: {role_arn}')
 
         try:
             # Initialize AWS discovery service
             discovery = AWSResourceDiscovery(
                 access_key_id=access_key_id,
                 secret_access_key=secret_access_key,
-                session_token=session_token
+                session_token=session_token,
+                role_arn=role_arn,
+                external_id=external_id
             )
 
             # Verify account ID matches
             discovered_account_id = discovery.get_account_id()
-            if discovered_account_id != account_number:
-                raise CommandError(
-                    f'Account ID mismatch: provided {account_number}, but credentials belong to {discovered_account_id}'
-                )
+
+            # When using role assumption, the discovered account should match the target account
+            # When NOT using role assumption, the credentials should match the target account
+            if role_arn:
+                # With role assumption: discovered_account_id should be the target account
+                if discovered_account_id != account_number:
+                    raise CommandError(
+                        f'Role assumption failed: assumed role account is {discovered_account_id}, '
+                        f'but expected {account_number}. Check role ARN.'
+                    )
+                self.stdout.write(self.style.SUCCESS(f'Successfully assumed role in account {account_number}'))
+            else:
+                # Without role assumption: credentials should belong to target account
+                if discovered_account_id != account_number:
+                    raise CommandError(
+                        f'Account ID mismatch: provided {account_number}, but credentials belong to {discovered_account_id}'
+                    )
             
             self.stdout.write(f'Verified account ID: {account_number}')
 
@@ -91,12 +135,30 @@ class Command(BaseCommand):
                 return
 
             # Discover all resources
+            logger.info(f"Beginning resource discovery across {len(regions)} region(s)")
             results = discovery.discover_all_resources(regions)
-            
+
             # Save to database
+            logger.info("Saving discovered resources to database")
             with transaction.atomic():
-                account = self._get_or_create_account(account_number, account_name)
+                account = self._get_or_create_account(
+                    account_number,
+                    account_name,
+                    role_arn=role_arn,
+                    external_id=external_id
+                )
                 self._save_resources(account, results)
+
+            # Log success
+            logger.info(f"="*80)
+            logger.info(f"Discovery completed successfully for account {account_number}")
+            logger.info(f"Summary: {results['summary']['total_vpcs']} VPCs, "
+                       f"{results['summary']['total_subnets']} Subnets, "
+                       f"{results['summary']['total_security_groups']} Security Groups, "
+                       f"{results['summary']['total_ec2_instances']} EC2 Instances, "
+                       f"{results['summary']['total_enis']} ENIs")
+            logger.info(f"Account last polled: {account.last_polled.isoformat()}")
+            logger.info(f"="*80)
 
             self.stdout.write(
                 self.style.SUCCESS('AWS resource discovery completed successfully!')
@@ -104,26 +166,57 @@ class Command(BaseCommand):
             self._print_summary(results)
 
         except Exception as e:
-            logger.error(f"AWS resource discovery failed: {e}")
+            logger.error(f"="*80)
+            logger.error(f"AWS resource discovery FAILED for account {account_number}")
+            logger.error(f"Error: {str(e)}")
+            logger.error(f"Authentication: {'Role Assumption' if role_arn else 'Direct Credentials'}")
+            if role_arn:
+                logger.error(f"Role ARN: {role_arn}")
+            logger.error(f"="*80)
             raise CommandError(f'Discovery failed: {e}')
 
-    def _get_or_create_account(self, account_id: str, account_name: str = None):
+    def _get_or_create_account(self, account_id: str, account_name: str = None,
+                                role_arn: str = None, external_id: str = None):
         """Get or create AWS account"""
         from django.utils import timezone
-        
+
+        defaults = {
+            'account_name': account_name or '',
+            'is_active': True
+        }
+
+        # Add role assumption fields if provided
+        if role_arn:
+            defaults['role_arn'] = role_arn
+        if external_id:
+            defaults['external_id'] = external_id
+
         account, created = AWSAccount.objects.get_or_create(
             account_id=account_id,
-            defaults={'account_name': account_name or '', 'is_active': True}
+            defaults=defaults
         )
-        
+
+        # Update fields if account already exists
+        if not created:
+            if account_name:
+                account.account_name = account_name
+            if role_arn is not None:  # Allow clearing role_arn by passing empty string
+                account.role_arn = role_arn
+            if external_id is not None:  # Allow clearing external_id by passing empty string
+                account.external_id = external_id
+
         # Update last_polled timestamp
         account.last_polled = timezone.now()
         account.save()
-        
+
         if created:
             self.stdout.write(f'Created new account: {account}')
+            if role_arn:
+                self.stdout.write(f'  Role ARN: {role_arn}')
         else:
             self.stdout.write(f'Using existing account: {account} (last polled: {account.last_polled})')
+            if role_arn:
+                self.stdout.write(f'  Updated Role ARN: {role_arn}')
         return account
 
     def _save_resources(self, account: AWSAccount, results: dict):
@@ -131,6 +224,12 @@ class Command(BaseCommand):
         total_saved = 0
 
         for region, region_data in results['regions'].items():
+            logger.info(f"Processing region {region}: "
+                       f"{len(region_data['vpcs'])} VPCs, "
+                       f"{len(region_data['subnets'])} Subnets, "
+                       f"{len(region_data['security_groups'])} Security Groups, "
+                       f"{len(region_data.get('ec2_instances', []))} EC2 Instances, "
+                       f"{len(region_data['enis'])} ENIs")
             self.stdout.write(f'Processing region: {region}')
             
             # Save VPCs

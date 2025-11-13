@@ -12,24 +12,68 @@ logger = logging.getLogger(__name__)
 
 class AWSResourceDiscovery:
     """Service for discovering AWS resources with IP addresses/ENIs"""
-    
-    def __init__(self, access_key_id: str = None, secret_access_key: str = None, 
-                 session_token: str = None, region: str = None):
+
+    def __init__(self, access_key_id: str = None, secret_access_key: str = None,
+                 session_token: str = None, region: str = None, role_arn: str = None,
+                 external_id: str = None):
         self.access_key_id = access_key_id or settings.AWS_ACCESS_KEY_ID
         self.secret_access_key = secret_access_key or settings.AWS_SECRET_ACCESS_KEY
         self.session_token = session_token or settings.AWS_SESSION_TOKEN
         self.region = region or settings.AWS_DEFAULT_REGION
-        
-        # Initialize AWS clients
-        self.session = boto3.Session(
+        self.role_arn = role_arn
+        self.external_id = external_id
+
+        # Initialize base AWS session with provided credentials
+        base_session = boto3.Session(
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
             aws_session_token=self.session_token,
             region_name=self.region
         )
-        
+
+        # If role_arn is provided, assume the role
+        if self.role_arn:
+            logger.info(f"Assuming role: {self.role_arn}")
+            self.session = self._assume_role(base_session, self.role_arn, self.external_id)
+        else:
+            self.session = base_session
+
         self.ec2_client = self.session.client('ec2')
         self.ec2_resource = self.session.resource('ec2')
+
+    def _assume_role(self, base_session: boto3.Session, role_arn: str, external_id: str = None) -> boto3.Session:
+        """Assume an IAM role and return a session with temporary credentials"""
+        try:
+            sts_client = base_session.client('sts')
+
+            # Build assume_role parameters
+            assume_role_params = {
+                'RoleArn': role_arn,
+                'RoleSessionName': 'AWSResourceInventoryDiscovery'
+            }
+
+            # Add external_id if provided
+            if external_id:
+                assume_role_params['ExternalId'] = external_id
+
+            # Assume the role
+            response = sts_client.assume_role(**assume_role_params)
+
+            # Extract temporary credentials
+            credentials = response['Credentials']
+
+            logger.info(f"Successfully assumed role: {role_arn}")
+
+            # Create a new session with temporary credentials
+            return boto3.Session(
+                aws_access_key_id=credentials['AccessKeyId'],
+                aws_secret_access_key=credentials['SecretAccessKey'],
+                aws_session_token=credentials['SessionToken'],
+                region_name=self.region
+            )
+        except Exception as e:
+            logger.error(f"Failed to assume role {role_arn}: {e}")
+            raise
     
     def get_account_id(self) -> str:
         """Get the current AWS account ID"""

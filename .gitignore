@@ -15,6 +15,10 @@ db.sqlite3
 .vscode
 .pytest_cache
 .coverage
+.claude
+.cursor
+.cursorignore
+*.local.md
 
 # Virtual environments
 .venv
@@ -25,3 +29,4 @@ env/
 poetry.lock
 dist/
 *.egg-info/
+logs/*.log
