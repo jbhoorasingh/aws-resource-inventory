@@ -85,18 +85,20 @@ def poll_account_view(request):
         secret_access_key = request.POST.get('secret_access_key')
         session_token = request.POST.get('session_token')
         regions = request.POST.get('regions', 'us-east-1,us-west-2')
-        
+        role_arn = request.POST.get('role_arn', '')
+        external_id = request.POST.get('external_id', '')
+
         # Validate required fields
         if not all([account_number, access_key_id, secret_access_key, session_token]):
             messages.error(request, 'All required fields must be provided.')
             return redirect('accounts')
-        
+
         # Parse regions
         region_list = [r.strip() for r in regions.split(',') if r.strip()]
         if not region_list:
             messages.error(request, 'At least one region must be specified.')
             return redirect('accounts')
-        
+
         # Run the discovery command
         cmd = [
             'python', 'manage.py', 'discover_aws_resources',
@@ -105,9 +107,15 @@ def poll_account_view(request):
             secret_access_key,
             session_token
         ] + region_list
-        
+
         if account_name:
             cmd.extend(['--account-name', account_name])
+
+        if role_arn:
+            cmd.extend(['--role-arn', role_arn])
+
+        if external_id:
+            cmd.extend(['--external-id', external_id])
         
         # Execute the command
         result = subprocess.run(
@@ -118,9 +126,10 @@ def poll_account_view(request):
         )
         
         if result.returncode == 0:
+            auth_method = f'using role assumption ({role_arn})' if role_arn else 'with direct credentials'
             messages.success(
-                request, 
-                f'Successfully polled account {account_number}. '
+                request,
+                f'Successfully polled account {account_number} {auth_method}. '
                 f'Discovered resources in regions: {", ".join(region_list)}'
             )
         else:
