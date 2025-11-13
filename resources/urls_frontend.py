@@ -21,6 +21,7 @@ urlpatterns = [
     path('edl/sg/<str:sg_id>/', views_edl.edl_security_group_ips, name='edl_security_group_ips'),
     path('edl/sg/<str:sg_id>/json/', views_edl.edl_security_group_json, name='edl_security_group_json'),
     path('poll-account/', views_frontend.poll_account_view, name='poll_account'),
+    path('bulk-poll-accounts/', views_frontend.bulk_poll_accounts_view, name='bulk_poll_accounts'),
     path('api/accounts/', views_frontend.api_accounts_json, name='api_accounts'),
     path('api/enis/', views_frontend.api_enis_json, name='api_enis'),
 ]

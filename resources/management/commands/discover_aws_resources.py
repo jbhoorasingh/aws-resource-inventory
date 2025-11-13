@@ -94,10 +94,23 @@ class Command(BaseCommand):
 
             # Verify account ID matches
             discovered_account_id = discovery.get_account_id()
-            if discovered_account_id != account_number:
-                raise CommandError(
-                    f'Account ID mismatch: provided {account_number}, but credentials belong to {discovered_account_id}'
-                )
+
+            # When using role assumption, the discovered account should match the target account
+            # When NOT using role assumption, the credentials should match the target account
+            if role_arn:
+                # With role assumption: discovered_account_id should be the target account
+                if discovered_account_id != account_number:
+                    raise CommandError(
+                        f'Role assumption failed: assumed role account is {discovered_account_id}, '
+                        f'but expected {account_number}. Check role ARN.'
+                    )
+                self.stdout.write(self.style.SUCCESS(f'Successfully assumed role in account {account_number}'))
+            else:
+                # Without role assumption: credentials should belong to target account
+                if discovered_account_id != account_number:
+                    raise CommandError(
+                        f'Account ID mismatch: provided {account_number}, but credentials belong to {discovered_account_id}'
+                    )
             
             self.stdout.write(f'Verified account ID: {account_number}')
 
