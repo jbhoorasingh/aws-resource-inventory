@@ -5,10 +5,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from resources.services import AWSResourceDiscovery
 from resources.models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, ENI, 
+    AWSAccount, VPC, Subnet, SecurityGroup, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
 from django.db import transaction
+from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,19 @@ class Command(BaseCommand):
         role_arn = options.get('role_arn')
         external_id = options.get('external_id')
 
+        # Log start of discovery
+        logger.info(f"="*80)
+        logger.info(f"Starting AWS resource discovery")
+        logger.info(f"Target Account: {account_number} ({account_name or 'No name'})")
+        logger.info(f"Regions: {', '.join(regions)}")
+        logger.info(f"Authentication Method: {'Role Assumption' if role_arn else 'Direct Credentials'}")
+        if role_arn:
+            logger.info(f"Role ARN: {role_arn}")
+            if external_id:
+                logger.info(f"External ID: {'*' * len(external_id)} (hidden)")
+        logger.info(f"Timestamp: {timezone.now().isoformat()}")
+        logger.info(f"="*80)
+
         self.stdout.write(
             self.style.SUCCESS(f'Starting AWS resource discovery for account {account_number} in regions: {", ".join(regions)}')
         )
@@ -121,9 +135,11 @@ class Command(BaseCommand):
                 return
 
             # Discover all resources
+            logger.info(f"Beginning resource discovery across {len(regions)} region(s)")
             results = discovery.discover_all_resources(regions)
-            
+
             # Save to database
+            logger.info("Saving discovered resources to database")
             with transaction.atomic():
                 account = self._get_or_create_account(
                     account_number,
@@ -133,13 +149,30 @@ class Command(BaseCommand):
                 )
                 self._save_resources(account, results)
 
+            # Log success
+            logger.info(f"="*80)
+            logger.info(f"Discovery completed successfully for account {account_number}")
+            logger.info(f"Summary: {results['summary']['total_vpcs']} VPCs, "
+                       f"{results['summary']['total_subnets']} Subnets, "
+                       f"{results['summary']['total_security_groups']} Security Groups, "
+                       f"{results['summary']['total_ec2_instances']} EC2 Instances, "
+                       f"{results['summary']['total_enis']} ENIs")
+            logger.info(f"Account last polled: {account.last_polled.isoformat()}")
+            logger.info(f"="*80)
+
             self.stdout.write(
                 self.style.SUCCESS('AWS resource discovery completed successfully!')
             )
             self._print_summary(results)
 
         except Exception as e:
-            logger.error(f"AWS resource discovery failed: {e}")
+            logger.error(f"="*80)
+            logger.error(f"AWS resource discovery FAILED for account {account_number}")
+            logger.error(f"Error: {str(e)}")
+            logger.error(f"Authentication: {'Role Assumption' if role_arn else 'Direct Credentials'}")
+            if role_arn:
+                logger.error(f"Role ARN: {role_arn}")
+            logger.error(f"="*80)
             raise CommandError(f'Discovery failed: {e}')
 
     def _get_or_create_account(self, account_id: str, account_name: str = None,
@@ -191,6 +224,12 @@ class Command(BaseCommand):
         total_saved = 0
 
         for region, region_data in results['regions'].items():
+            logger.info(f"Processing region {region}: "
+                       f"{len(region_data['vpcs'])} VPCs, "
+                       f"{len(region_data['subnets'])} Subnets, "
+                       f"{len(region_data['security_groups'])} Security Groups, "
+                       f"{len(region_data.get('ec2_instances', []))} EC2 Instances, "
+                       f"{len(region_data['enis'])} ENIs")
             self.stdout.write(f'Processing region: {region}')
             
             # Save VPCs

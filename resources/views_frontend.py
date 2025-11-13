@@ -10,7 +10,10 @@ from django.db.models import Count, Q
 from django.utils import timezone
 import subprocess
 import json
+import logging
 from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance
+
+logger = logging.getLogger(__name__)
 
 
 def accounts_view(request):
@@ -88,6 +91,13 @@ def poll_account_view(request):
         role_arn = request.POST.get('role_arn', '')
         external_id = request.POST.get('external_id', '')
 
+        # Log poll attempt
+        logger.info(f"Web UI poll request received for account {account_number} ({account_name or 'No name'})")
+        logger.info(f"Regions: {regions}")
+        logger.info(f"Auth method: {'Role Assumption' if role_arn else 'Direct Credentials'}")
+        if role_arn:
+            logger.info(f"Role ARN: {role_arn}")
+
         # Validate required fields
         if not all([account_number, access_key_id, secret_access_key, session_token]):
             messages.error(request, 'All required fields must be provided.')
@@ -127,14 +137,18 @@ def poll_account_view(request):
         
         if result.returncode == 0:
             auth_method = f'using role assumption ({role_arn})' if role_arn else 'with direct credentials'
+            logger.info(f"Successfully polled account {account_number} {auth_method}")
+            logger.info(f"Regions: {', '.join(region_list)}")
             messages.success(
                 request,
                 f'Successfully polled account {account_number} {auth_method}. '
                 f'Discovered resources in regions: {", ".join(region_list)}'
             )
         else:
+            logger.error(f"Failed to poll account {account_number}")
+            logger.error(f"Error output: {result.stderr[:500]}")
             messages.error(
-                request, 
+                request,
                 f'Failed to poll account {account_number}. '
                 f'Error: {result.stderr}'
             )
@@ -156,6 +170,11 @@ def bulk_poll_accounts_view(request):
         session_token = request.POST.get('session_token', '')
         regions = request.POST.get('regions', 'us-east-1,us-west-2')
         accounts_config = request.POST.get('accounts_config', '')
+
+        logger.info("="*80)
+        logger.info("BULK POLL REQUEST RECEIVED")
+        logger.info(f"Timestamp: {timezone.now().isoformat()}")
+        logger.info(f"Regions: {regions}")
 
         # Validate required fields
         if not all([access_key_id, secret_access_key, accounts_config]):
@@ -196,6 +215,11 @@ def bulk_poll_accounts_view(request):
             messages.error(request, 'No valid accounts found in configuration.')
             return redirect('accounts')
 
+        logger.info(f"Total accounts to poll: {len(accounts)}")
+        for idx, acc in enumerate(accounts, 1):
+            logger.info(f"  {idx}. Account {acc['account_number']} ({acc['account_name']}) - Role: {acc['role_arn']}")
+        logger.info("="*80)
+
         # Poll each account
         total_accounts = len(accounts)
         successful = 0
@@ -207,6 +231,8 @@ def bulk_poll_accounts_view(request):
             account_name = account_config['account_name']
             role_arn = account_config['role_arn']
             external_id = account_config['external_id']
+
+            logger.info(f"Processing account {idx}/{total_accounts}: {account_number} ({account_name})")
 
             try:
                 # Build command
@@ -238,18 +264,31 @@ def bulk_poll_accounts_view(request):
 
                 if result.returncode == 0:
                     successful += 1
+                    logger.info(f"✓ SUCCESS: Account {account_number} ({account_name})")
                     results.append(f'✓ Account {account_number} ({account_name}): Success')
                 else:
                     failed += 1
                     error_msg = result.stderr[:200] if result.stderr else 'Unknown error'
+                    logger.error(f"✗ FAILED: Account {account_number} ({account_name}) - {error_msg}")
                     results.append(f'✗ Account {account_number} ({account_name}): Failed - {error_msg}')
 
             except subprocess.TimeoutExpired:
                 failed += 1
+                logger.error(f"✗ TIMEOUT: Account {account_number} ({account_name}) after 5 minutes")
                 results.append(f'✗ Account {account_number} ({account_name}): Timeout after 5 minutes')
             except Exception as e:
                 failed += 1
+                logger.error(f"✗ ERROR: Account {account_number} ({account_name}) - {str(e)}")
                 results.append(f'✗ Account {account_number} ({account_name}): Error - {str(e)}')
+
+        # Log final summary
+        logger.info("="*80)
+        logger.info(f"BULK POLL COMPLETED")
+        logger.info(f"Total accounts: {total_accounts}")
+        logger.info(f"Successful: {successful}")
+        logger.info(f"Failed: {failed}")
+        logger.info(f"Success rate: {(successful/total_accounts*100):.1f}%")
+        logger.info("="*80)
 
         # Show summary message
         if successful == total_accounts:
