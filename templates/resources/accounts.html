@@ -6,9 +6,14 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-users"></i> AWS Accounts</h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pollModal">
-        <i class="fas fa-sync"></i> Poll Account
-    </button>
+    <div class="btn-group">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pollModal">
+            <i class="fas fa-sync"></i> Poll Single Account
+        </button>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#bulkPollModal">
+            <i class="fas fa-layer-group"></i> Bulk Poll Accounts
+        </button>
+    </div>
 </div>
 
 <div class="row">
@@ -26,6 +31,7 @@
                                     <th>Account ID</th>
                                     <th>Account Name</th>
                                     <th>Status</th>
+                                    <th>Auth Method</th>
                                     <th>ENIs Count</th>
                                     <th>Last Polled</th>
                                     <th>Created</th>
@@ -50,6 +56,17 @@
                                             <span class="badge bg-success">Active</span>
                                         {% else %}
                                             <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if account.role_arn %}
+                                            <span class="badge bg-warning text-dark" title="{{ account.role_arn }}">
+                                                <i class="fas fa-user-shield"></i> Role Assumption
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-primary">
+                                                <i class="fas fa-key"></i> Direct
+                                            </span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -81,10 +98,15 @@
                     <div class="text-center py-5">
                         <i class="fas fa-users fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">No accounts found</h5>
-                        <p class="text-muted">Start by polling an AWS account to discover resources.</p>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pollModal">
-                            <i class="fas fa-plus"></i> Poll First Account
-                        </button>
+                        <p class="text-muted">Start by polling AWS accounts to discover resources.</p>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pollModal">
+                                <i class="fas fa-plus"></i> Poll Single Account
+                            </button>
+                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#bulkPollModal">
+                                <i class="fas fa-layer-group"></i> Poll Multiple Accounts
+                            </button>
+                        </div>
                     </div>
                 {% endif %}
             </div>
@@ -107,8 +129,33 @@
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Note:</strong> You need AWS credentials (Access Key ID, Secret Access Key, Session Token) 
-                        and the account number to poll resources.
+                        <strong>Note:</strong> You can use direct credentials OR role assumption for cross-account access.
+                    </div>
+
+                    <ul class="nav nav-tabs mb-3" id="authTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="direct-tab" data-bs-toggle="tab" data-bs-target="#direct" type="button" role="tab">
+                                <i class="fas fa-key"></i> Direct Credentials
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="role-tab" data-bs-toggle="tab" data-bs-target="#role" type="button" role="tab">
+                                <i class="fas fa-user-shield"></i> Role Assumption
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="authTabContent">
+                        <div class="tab-pane fade show active" id="direct" role="tabpanel">
+                            <div class="alert alert-light">
+                                <small><strong>Direct Credentials:</strong> Use this for single-account access with long-term or temporary credentials.</small>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="role" role="tabpanel">
+                            <div class="alert alert-light">
+                                <small><strong>Role Assumption:</strong> Use this for multi-account environments. Provide identity account credentials and the role ARN in the target account.</small>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="row">
@@ -154,16 +201,137 @@
                     
                     <div class="mb-3">
                         <label for="regions" class="form-label">AWS Regions *</label>
-                        <input type="text" class="form-control" id="regions" name="regions" 
-                               placeholder="us-east-1,us-west-2,eu-west-1" 
+                        <input type="text" class="form-control" id="regions" name="regions"
+                               placeholder="us-east-1,us-west-2,eu-west-1"
                                value="us-east-1,us-west-2" required>
                         <div class="form-text">Comma-separated list of regions to scan</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div id="roleAssumptionFields" style="display: none;">
+                        <h6 class="mb-3"><i class="fas fa-user-shield"></i> Role Assumption Configuration (Optional)</h6>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Cross-Account Access:</strong> Use these fields if you want to assume a role in the target account.
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="role_arn" class="form-label">
+                                Role ARN
+                                <i class="fas fa-question-circle text-muted"
+                                   title="ARN of the IAM role to assume in the target account"
+                                   data-bs-toggle="tooltip"></i>
+                            </label>
+                            <input type="text" class="form-control" id="role_arn" name="role_arn"
+                                   placeholder="arn:aws:iam::123456789012:role/ResourceDiscoveryRole">
+                            <div class="form-text">Example: arn:aws:iam::987654321098:role/ResourceDiscoveryRole</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="external_id" class="form-label">
+                                External ID (Optional)
+                                <i class="fas fa-question-circle text-muted"
+                                   title="Additional security parameter for role assumption"
+                                   data-bs-toggle="tooltip"></i>
+                            </label>
+                            <input type="text" class="form-control" id="external_id" name="external_id"
+                                   placeholder="my-external-id">
+                            <div class="form-text">Optional security parameter configured in the IAM trust policy</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="pollButton">
                         <i class="fas fa-sync"></i> Start Polling
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Poll Accounts Modal -->
+<div class="modal fade" id="bulkPollModal" tabindex="-1" aria-labelledby="bulkPollModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkPollModalLabel">
+                    <i class="fas fa-layer-group"></i> Bulk Poll Multiple AWS Accounts
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="bulkPollForm" method="post" action="{% url 'bulk_poll_accounts' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Bulk Polling with Role Assumption:</strong> Poll multiple accounts using the same identity credentials.
+                    </div>
+
+                    <h6 class="mb-3">Identity Account Credentials</h6>
+                    <p class="text-muted small">These credentials will be used to assume roles in all target accounts.</p>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="bulk_access_key_id" class="form-label">Access Key ID *</label>
+                                <input type="text" class="form-control" id="bulk_access_key_id" name="access_key_id"
+                                       placeholder="AKIA..." required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="bulk_secret_access_key" class="form-label">Secret Access Key *</label>
+                                <input type="password" class="form-control" id="bulk_secret_access_key" name="secret_access_key"
+                                       placeholder="Your secret key" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="bulk_session_token" class="form-label">Session Token</label>
+                                <input type="password" class="form-control" id="bulk_session_token" name="session_token"
+                                       placeholder="Leave empty if using IAM user">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="bulk_regions" class="form-label">AWS Regions *</label>
+                        <input type="text" class="form-control" id="bulk_regions" name="regions"
+                               placeholder="us-east-1,us-west-2,eu-west-1"
+                               value="us-east-1,us-west-2" required>
+                        <div class="form-text">Comma-separated list of regions (will be used for all accounts)</div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h6 class="mb-3">Target Accounts Configuration</h6>
+                    <p class="text-muted small">Enter one account per line in the format: <code>account_number|account_name|role_arn|external_id</code></p>
+
+                    <div class="mb-3">
+                        <label for="bulk_accounts_config" class="form-label">Accounts Configuration *</label>
+                        <textarea class="form-control font-monospace" id="bulk_accounts_config" name="accounts_config"
+                                  rows="10" required
+                                  placeholder="264449297775|Production Account|arn:aws:iam::264449297775:role/PaloInventoryInspectionRole|
+123456789012|Dev Account|arn:aws:iam::123456789012:role/PaloInventoryInspectionRole|my-external-id
+987654444448|Staging Account|arn:aws:iam::987654444448:role/PaloInventoryInspectionRole|"></textarea>
+                        <div class="form-text">
+                            <strong>Format:</strong> <code>account_number|account_name|role_arn|external_id</code><br>
+                            <strong>Note:</strong> External ID is optional (leave empty or omit the last <code>|</code> if not needed)
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Note:</strong> Accounts will be polled sequentially. This may take several minutes for many accounts.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" id="bulkPollButton">
+                        <i class="fas fa-layer-group"></i> Start Bulk Polling
                     </button>
                 </div>
             </form>
@@ -180,18 +348,47 @@ function pollAccount(accountId, accountName) {
     $('#pollModal').modal('show');
 }
 
+// Toggle role assumption fields based on selected tab
+$('#authTabs button').on('click', function (e) {
+    const targetTab = $(e.target).attr('data-bs-target');
+    if (targetTab === '#role') {
+        $('#roleAssumptionFields').slideDown();
+    } else {
+        $('#roleAssumptionFields').slideUp();
+    }
+});
+
+// Initialize tooltips
+$(document).ready(function() {
+    $('[data-bs-toggle="tooltip"]').tooltip();
+});
+
 $('#pollForm').on('submit', function(e) {
     const submitBtn = $('#pollButton');
     const originalText = submitBtn.html();
-    
+
     submitBtn.prop('disabled', true);
     submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Polling...');
-    
+
     // Re-enable button after 30 seconds as fallback
     setTimeout(function() {
         submitBtn.prop('disabled', false);
         submitBtn.html(originalText);
     }, 30000);
+});
+
+$('#bulkPollForm').on('submit', function(e) {
+    const submitBtn = $('#bulkPollButton');
+    const originalText = submitBtn.html();
+
+    submitBtn.prop('disabled', true);
+    submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Bulk Polling...');
+
+    // Re-enable button after 2 minutes as fallback (bulk takes longer)
+    setTimeout(function() {
+        submitBtn.prop('disabled', false);
+        submitBtn.html(originalText);
+    }, 120000);
 });
 </script>
 {% endblock %}
