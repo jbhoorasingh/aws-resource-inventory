@@ -11,11 +11,30 @@ from .models import (
 
 @admin.register(AWSAccount)
 class AWSAccountAdmin(admin.ModelAdmin):
-    list_display = ['account_id', 'account_name', 'is_active', 'last_polled', 'created_at']
+    list_display = ['account_id', 'account_name', 'is_active', 'has_role_assumption', 'last_polled', 'created_at']
     list_filter = ['is_active', 'created_at', 'last_polled']
-    search_fields = ['account_id', 'account_name']
+    search_fields = ['account_id', 'account_name', 'role_arn']
     readonly_fields = ['created_at', 'updated_at']
     ordering = ['-last_polled', 'account_id']
+
+    fieldsets = (
+        ('Account Information', {
+            'fields': ('account_id', 'account_name', 'is_active', 'last_polled')
+        }),
+        ('Role Assumption Configuration', {
+            'fields': ('role_arn', 'external_id'),
+            'description': 'Configure role assumption for cross-account access. Leave blank for direct credential access.'
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_role_assumption(self, obj):
+        return bool(obj.role_arn)
+    has_role_assumption.boolean = True
+    has_role_assumption.short_description = 'Uses Role'
 
 
 @admin.register(VPC)

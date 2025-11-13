@@ -53,6 +53,16 @@ class Command(BaseCommand):
             action='store_true',
             help='Show what would be discovered without saving to database'
         )
+        parser.add_argument(
+            '--role-arn',
+            type=str,
+            help='IAM Role ARN to assume for discovering resources (optional)'
+        )
+        parser.add_argument(
+            '--external-id',
+            type=str,
+            help='External ID for role assumption (optional, used with --role-arn)'
+        )
 
     def handle(self, *args, **options):
         account_number = options['account_number']
@@ -62,17 +72,24 @@ class Command(BaseCommand):
         session_token = options['session_token']
         account_name = options.get('account_name')
         dry_run = options['dry_run']
+        role_arn = options.get('role_arn')
+        external_id = options.get('external_id')
 
         self.stdout.write(
             self.style.SUCCESS(f'Starting AWS resource discovery for account {account_number} in regions: {", ".join(regions)}')
         )
+
+        if role_arn:
+            self.stdout.write(f'Using role assumption: {role_arn}')
 
         try:
             # Initialize AWS discovery service
             discovery = AWSResourceDiscovery(
                 access_key_id=access_key_id,
                 secret_access_key=secret_access_key,
-                session_token=session_token
+                session_token=session_token,
+                role_arn=role_arn,
+                external_id=external_id
             )
 
             # Verify account ID matches
@@ -95,7 +112,12 @@ class Command(BaseCommand):
             
             # Save to database
             with transaction.atomic():
-                account = self._get_or_create_account(account_number, account_name)
+                account = self._get_or_create_account(
+                    account_number,
+                    account_name,
+                    role_arn=role_arn,
+                    external_id=external_id
+                )
                 self._save_resources(account, results)
 
             self.stdout.write(
@@ -107,23 +129,48 @@ class Command(BaseCommand):
             logger.error(f"AWS resource discovery failed: {e}")
             raise CommandError(f'Discovery failed: {e}')
 
-    def _get_or_create_account(self, account_id: str, account_name: str = None):
+    def _get_or_create_account(self, account_id: str, account_name: str = None,
+                                role_arn: str = None, external_id: str = None):
         """Get or create AWS account"""
         from django.utils import timezone
-        
+
+        defaults = {
+            'account_name': account_name or '',
+            'is_active': True
+        }
+
+        # Add role assumption fields if provided
+        if role_arn:
+            defaults['role_arn'] = role_arn
+        if external_id:
+            defaults['external_id'] = external_id
+
         account, created = AWSAccount.objects.get_or_create(
             account_id=account_id,
-            defaults={'account_name': account_name or '', 'is_active': True}
+            defaults=defaults
         )
-        
+
+        # Update fields if account already exists
+        if not created:
+            if account_name:
+                account.account_name = account_name
+            if role_arn is not None:  # Allow clearing role_arn by passing empty string
+                account.role_arn = role_arn
+            if external_id is not None:  # Allow clearing external_id by passing empty string
+                account.external_id = external_id
+
         # Update last_polled timestamp
         account.last_polled = timezone.now()
         account.save()
-        
+
         if created:
             self.stdout.write(f'Created new account: {account}')
+            if role_arn:
+                self.stdout.write(f'  Role ARN: {role_arn}')
         else:
             self.stdout.write(f'Using existing account: {account} (last polled: {account.last_polled})')
+            if role_arn:
+                self.stdout.write(f'  Updated Role ARN: {role_arn}')
         return account
 
     def _save_resources(self, account: AWSAccount, results: dict):

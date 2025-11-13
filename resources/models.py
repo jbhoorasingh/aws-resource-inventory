@@ -8,6 +8,11 @@ class AWSAccount(models.Model):
     account_name = models.CharField(max_length=255, blank=True, help_text="Account name or alias")
     is_active = models.BooleanField(default=True, help_text="Whether this account is actively monitored")
     last_polled = models.DateTimeField(null=True, blank=True, help_text="Last time resources were polled for this account")
+
+    # Role assumption configuration
+    role_arn = models.CharField(max_length=2048, blank=True, help_text="IAM Role ARN to assume when discovering resources in this account")
+    external_id = models.CharField(max_length=1224, blank=True, help_text="External ID for role assumption (optional, for additional security)")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
