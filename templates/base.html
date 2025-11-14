@@ -4,104 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AWS Resource Inventory{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'aws-orange': '#FF9900',
+                        'aws-dark': '#232F3E',
+                        'aws-light': '#37475A',
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        .navbar-brand {
-            font-weight: bold;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .card {
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-            border: 1px solid rgba(0, 0, 0, 0.125);
+        .fade-in {
+            animation: fadeIn 0.4s ease;
         }
-        .table-responsive {
-            border-radius: 0.375rem;
-        }
-        .badge {
-            font-size: 0.75em;
-        }
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-        }
-        .modal-header {
-            background-color: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .spinner-border-sm {
-            width: 1rem;
-            height: 1rem;
-        }
+
+        /* Minimal custom styles - most styling via Tailwind */
+
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'accounts' %}">
-                <i class="fas fa-cloud"></i> AWS Resource Inventory
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'accounts' %}active{% endif %}" 
-                           href="{% url 'accounts' %}">
-                            <i class="fas fa-users"></i> Accounts
+<body class="bg-gray-50 font-sans text-gray-800">
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-aws-dark to-aws-light shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="{% url 'accounts' %}" class="text-white font-bold text-xl tracking-wide">
+                            <i class="fas fa-cloud text-aws-orange"></i> AWS Resource Inventory
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'enis' %}active{% endif %}"
-                           href="{% url 'enis' %}">
-                            <i class="fas fa-network-wired"></i> ENIs
+                    </div>
+                    <div class="hidden sm:ml-8 sm:flex sm:space-x-2">
+                        <a href="{% url 'accounts' %}" class="{% if request.resolver_match.url_name == 'accounts' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-users mr-2"></i> Accounts
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'ec2_instances' or request.resolver_match.url_name == 'ec2_instance_detail' %}active{% endif %}"
-                           href="{% url 'ec2_instances' %}">
-                            <i class="fas fa-server"></i> EC2 Instances
+                        <a href="{% url 'enis' %}" class="{% if request.resolver_match.url_name == 'enis' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-network-wired mr-2"></i> ENIs
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'security_groups' or request.resolver_match.url_name == 'security_group_detail' %}active{% endif %}"
-                           href="{% url 'security_groups' %}">
-                            <i class="fas fa-shield-alt"></i> Security Groups
+                        <a href="{% url 'ec2_instances' %}" class="{% if request.resolver_match.url_name == 'ec2_instances' or request.resolver_match.url_name == 'ec2_instance_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-server mr-2"></i> EC2
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}active{% endif %}" 
-                           href="{% url 'edl_summary' %}">
-                            <i class="fas fa-list-alt"></i> EDL
+                        <a href="{% url 'security_groups' %}" class="{% if request.resolver_match.url_name == 'security_groups' or request.resolver_match.url_name == 'security_group_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-shield-alt mr-2"></i> Security Groups
                         </a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/" target="_blank">
-                            <i class="fas fa-cog"></i> Admin
+                        <a href="{% url 'edl_summary' %}" class="{% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-list-alt mr-2"></i> EDL
                         </a>
-                    </li>
-                </ul>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <a href="/admin/" target="_blank" class="text-white hover:bg-white hover:bg-opacity-10 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200">
+                        <i class="fas fa-cog mr-2"></i> Admin
+                    </a>
+                </div>
             </div>
         </div>
     </nav>
 
-    <main class="container mt-4">
+    <!-- Main Content -->
+    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
+            <div class="space-y-4 mb-6">
+                {% for message in messages %}
+                    <div class="{% if message.tags == 'success' %}bg-green-50 border-l-4 border-green-500 text-green-700{% elif message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% elif message.tags == 'warning' %}bg-yellow-50 border-l-4 border-yellow-500 text-yellow-700{% else %}bg-blue-50 border-l-4 border-blue-500 text-blue-700{% endif %} p-4 rounded-lg shadow-sm" role="alert">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm">{{ message }}</p>
+                            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
         {% endif %}
 
         {% block content %}{% endblock %}
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% block extra_js %}{% endblock %}
 </body>
