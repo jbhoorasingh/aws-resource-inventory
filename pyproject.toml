@@ -2,8 +2,8 @@
 name = "aws-resource-inventory"
 version = "0.1.0"
 description = "Django application for discovering and managing AWS networking resources across multiple accounts and regions"
-authors = ["Your Name <your.email@example.com>"]
-readme = "CLAUDE.md"
+authors = ["Your Name <jermaine@jermaine.co>"]
+readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
