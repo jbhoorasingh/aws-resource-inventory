@@ -147,8 +147,8 @@
                 {% if instance.tags %}
                     <div class="flex flex-wrap gap-2">
                         {% for key, value in instance.tags.items %}
-                            <div class="inline-flex items-center px-3 py-2 rounded text-sm bg-gray-100 text-gray-800 border border-gray-200">
-                                <strong>{{ key }}:</strong>&nbsp;{{ value }}
+                            <div class="inline-flex items-center px-3 py-2 rounded text-sm bg-gray-100 text-gray-800 border border-gray-200 break-words max-w-full" style="word-break: break-word;" title="{{ key }}: {{ value }}">
+                                <strong class="whitespace-nowrap flex-shrink-0">{{ key }}:</strong>&nbsp;<span class="break-words" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ value }}</span>
                             </div>
                         {% endfor %}
                     </div>
@@ -172,26 +172,25 @@
             <div class="space-y-4">
                 {% for eni_data in enis_with_sgs %}
                 <details class="border border-gray-200 rounded-lg overflow-hidden">
-                    <summary class="bg-gray-50 px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <strong class="text-gray-900">{{ eni_data.eni.name|default:"No name" }}</strong>
-                                <code class="ml-2 bg-gray-100 px-2 py-1 rounded text-sm">{{ eni_data.eni.eni_id }}</code>
-                                {% if eni_data.eni.status == 'available' %}
-                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        {{ eni_data.eni.status }}
-                                    </span>
-                                {% elif eni_data.eni.status == 'in-use' %}
-                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                        {{ eni_data.eni.status }}
-                                    </span>
-                                {% else %}
-                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        {{ eni_data.eni.status }}
-                                    </span>
-                                {% endif %}
-                            </div>
+                    <summary class="bg-gray-50 px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between list-none">
+                        <div class="flex items-center flex-wrap gap-2">
+                            <strong class="text-gray-900">{{ eni_data.eni.name|default:"No name" }}</strong>
+                            <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ eni_data.eni.eni_id }}</code>
+                            {% if eni_data.eni.status == 'available' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {{ eni_data.eni.status }}
+                                </span>
+                            {% elif eni_data.eni.status == 'in-use' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    {{ eni_data.eni.status }}
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ eni_data.eni.status }}
+                                </span>
+                            {% endif %}
                         </div>
+                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200 details-chevron ml-2"></i>
                     </summary>
                     <div class="p-6 bg-white">
                         <div class="grid grid-cols-2 gap-6 mb-6">
@@ -367,4 +366,23 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+summary::-webkit-details-marker {
+    display: none;
+}
+
+summary::marker {
+    display: none;
+}
+
+details[open] .details-chevron {
+    transform: rotate(180deg);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
 {% endblock %}

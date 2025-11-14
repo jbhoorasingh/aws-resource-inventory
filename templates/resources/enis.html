@@ -137,8 +137,8 @@
                                 {% endif %}
                             </td>
                             <td class="px-3 py-3">
-                                <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono block mb-1" title="{{ eni.subnet.vpc.vpc_id }}">{{ eni.subnet.vpc.vpc_id }}</code>
-                                <code class="bg-gray-50 px-1.5 py-0.5 rounded text-xs text-gray-600 font-mono" title="{{ eni.subnet.subnet_id }}">{{ eni.subnet.subnet_id }}</code>
+                                <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono block mb-1 whitespace-nowrap" title="{{ eni.subnet.vpc.vpc_id }}">{{ eni.subnet.vpc.vpc_id }}</code>
+                                <code class="bg-gray-50 px-1.5 py-0.5 rounded text-xs text-gray-600 font-mono whitespace-nowrap" title="{{ eni.subnet.subnet_id }}">{{ eni.subnet.subnet_id }}</code>
                             </td>
                             <td class="px-3 py-3">
                                 {% if eni.ec2_instance %}
@@ -173,8 +173,8 @@
                                 <div class="flex flex-wrap gap-1">
                                     {% for sg in eni.eni_security_groups.all|slice:":2" %}
                                         <a href="{% url 'security_group_detail' sg.security_group.id %}" class="text-blue-600 hover:text-blue-800">
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200">
-                                                {{ sg.security_group.name|truncatechars:15 }}
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200" title="{{ sg.security_group.name }}">
+                                                {{ sg.security_group.name|truncatechars:30 }}
                                             </span>
                                         </a>
                                     {% empty %}
