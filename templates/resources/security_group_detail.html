@@ -4,171 +4,222 @@
 {% block title %}{{ security_group.name }} - Security Group Rules{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="flex justify-between items-center mb-8 fade-in">
     <div>
-        <h2><i class="fas fa-shield-alt"></i> {{ security_group.name }}</h2>
-        <p class="text-muted mb-0">
-            <code>{{ security_group.sg_id }}</code> in VPC <code>{{ security_group.vpc.vpc_id }}</code>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-shield-alt text-aws-orange"></i> {{ security_group.name }}
+        </h2>
+        <p class="text-gray-600">
+            <code class="bg-gray-100 px-2 py-1 rounded">{{ security_group.sg_id }}</code> in VPC <code class="bg-gray-100 px-2 py-1 rounded">{{ security_group.vpc.vpc_id }}</code>
         </p>
     </div>
-    <a href="{% url 'security_groups' %}" class="btn btn-outline-secondary">
+    <a href="{% url 'security_groups' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
         <i class="fas fa-arrow-left"></i> Back to Security Groups
     </a>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Security Group Information</h5>
+<div class="bg-white shadow-lg rounded-lg mb-6">
+    <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <h5 class="text-lg font-semibold text-gray-900">Security Group Information</h5>
+    </div>
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <table class="min-w-full">
+                    <tbody class="divide-y divide-gray-100">
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500" style="width: 40%;">Name:</td>
+                            <td class="py-3 text-sm text-gray-900">{{ security_group.name }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500">ID:</td>
+                            <td class="py-3 text-sm"><code class="bg-gray-100 px-2 py-1 rounded">{{ security_group.sg_id }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500">VPC:</td>
+                            <td class="py-3 text-sm">
+                                <code class="bg-gray-100 px-2 py-1 rounded block mb-1">{{ security_group.vpc.vpc_id }}</code>
+                                <small class="text-gray-500">{{ security_group.vpc.cidr_block }}</small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500">Owner Account:</td>
+                            <td class="py-3 text-sm"><code class="bg-gray-100 px-2 py-1 rounded">{{ security_group.vpc.owner_account }}</code></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <strong>Name:</strong> {{ security_group.name }}<br>
-                        <strong>ID:</strong> <code>{{ security_group.sg_id }}</code><br>
-                        <strong>VPC:</strong> <code>{{ security_group.vpc.vpc_id }}</code><br>
-                        <strong>Owner Account:</strong> <code>{{ security_group.vpc.owner_account }}</code>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Region:</strong> {{ security_group.vpc.region }}<br>
-                        <strong>VPC CIDR:</strong> {{ security_group.vpc.cidr_block }}<br>
-                        <strong>Description:</strong> {{ security_group.description|default:"No description" }}
-                    </div>
-                </div>
+            <div>
+                <table class="min-w-full">
+                    <tbody class="divide-y divide-gray-100">
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500" style="width: 40%;">Region:</td>
+                            <td class="py-3 text-sm">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ security_group.vpc.region }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500">VPC CIDR:</td>
+                            <td class="py-3 text-sm text-gray-900">{{ security_group.vpc.cidr_block }}</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 pr-4 text-sm text-gray-500">Description:</td>
+                            <td class="py-3 text-sm text-gray-900">{{ security_group.description|default:"No description" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Security Group Rules</h5>
+<div class="bg-white shadow-lg rounded-lg mb-6">
+    <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <h5 class="text-lg font-semibold text-gray-900"><i class="fas fa-list-alt mr-2 text-aws-orange"></i>Security Group Rules</h5>
+    </div>
+    <div class="p-6">
+        {% if rules %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Protocol</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Port Range</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source/Destination</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for rule in rules %}
+                        <tr class="hover:bg-gray-50 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if rule.rule_type == 'ingress' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Ingress
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                        Egress
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if rule.protocol == '-1' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        All
+                                    </span>
+                                {% else %}
+                                    <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ rule.protocol|upper }}</code>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if rule.from_port is None and rule.to_port is None %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        All
+                                    </span>
+                                {% elif rule.from_port == rule.to_port %}
+                                    <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ rule.from_port }}</code>
+                                {% elif rule.from_port and rule.to_port %}
+                                    <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ rule.from_port }}-{{ rule.to_port }}</code>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        All
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                {% if rule.source_type == 'cidr' %}
+                                    <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ rule.source_value }}</code>
+                                {% elif rule.source_type == 'security_group' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                        {{ rule.source_value }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-gray-900">{{ rule.source_value }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                {% if rule.description %}
+                                    <span class="text-gray-900">{{ rule.description }}</span>
+                                {% else %}
+                                    <span class="text-gray-400">No description</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <div class="card-body">
-                {% if rules %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Type</th>
-                                    <th>Protocol</th>
-                                    <th>Port Range</th>
-                                    <th>Source/Destination</th>
-                                    <th>Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for rule in rules %}
-                                <tr>
-                                    <td>
-                                        {% if rule.rule_type == 'ingress' %}
-                                            <span class="badge bg-success">Ingress</span>
-                                        {% else %}
-                                            <span class="badge bg-info">Egress</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if rule.protocol == '-1' %}
-                                            <span class="badge bg-warning">All</span>
-                                        {% else %}
-                                            <code>{{ rule.protocol|upper }}</code>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if rule.from_port is None and rule.to_port is None %}
-                                            <span class="badge bg-warning">All</span>
-                                        {% elif rule.from_port == rule.to_port %}
-                                            <code>{{ rule.from_port }}</code>
-                                        {% elif rule.from_port and rule.to_port %}
-                                            <code>{{ rule.from_port }}-{{ rule.to_port }}</code>
-                                        {% else %}
-                                            <span class="badge bg-warning">All</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if rule.source_type == 'cidr' %}
-                                            <code>{{ rule.source_value }}</code>
-                                        {% elif rule.source_type == 'security_group' %}
-                                            <span class="badge bg-secondary">{{ rule.source_value }}</span>
-                                        {% else %}
-                                            {{ rule.source_value }}
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if rule.description %}
-                                            {{ rule.description }}
-                                        {% else %}
-                                            <span class="text-muted">No description</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-exclamation-triangle fa-2x text-muted mb-3"></i>
-                        <h5 class="text-muted">No rules found</h5>
-                        <p class="text-muted">This security group has no ingress or egress rules.</p>
-                    </div>
-                {% endif %}
+        {% else %}
+            <div class="text-center py-12">
+                <i class="fas fa-exclamation-triangle text-gray-300 text-6xl mb-4"></i>
+                <h5 class="text-xl font-semibold text-gray-600 mb-2">No rules found</h5>
+                <p class="text-gray-500">This security group has no ingress or egress rules.</p>
             </div>
-        </div>
+        {% endif %}
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Associated ENIs</h5>
+<div class="bg-white shadow-lg rounded-lg">
+    <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <h5 class="text-lg font-semibold text-gray-900"><i class="fas fa-network-wired mr-2 text-aws-orange"></i>Associated ENIs</h5>
+    </div>
+    <div class="p-6">
+        {% if associated_enis %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ENI ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Private IP</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subnet</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for eni in associated_enis %}
+                        <tr class="hover:bg-gray-50 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ eni.eni_id }}</code>
+                            </td>
+                            <td class="px-6 py-4 text-gray-900">{{ eni.name|default:"No name" }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ eni.private_ip_address }}</code>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <code class="bg-gray-100 px-2 py-1 rounded text-sm">{{ eni.subnet.subnet_id }}</code>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if eni.status == 'available' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        {{ eni.status }}
+                                    </span>
+                                {% elif eni.status == 'in-use' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        {{ eni.status }}
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                        {{ eni.status }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <div class="card-body">
-                {% if associated_enis %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>ENI ID</th>
-                                    <th>Name</th>
-                                    <th>Private IP</th>
-                                    <th>Subnet</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for eni in associated_enis %}
-                                <tr>
-                                    <td><code>{{ eni.eni_id }}</code></td>
-                                    <td>{{ eni.name|default:"No name" }}</td>
-                                    <td><code>{{ eni.private_ip_address }}</code></td>
-                                    <td><code>{{ eni.subnet.subnet_id }}</code></td>
-                                    <td>
-                                        {% if eni.status == 'available' %}
-                                            <span class="badge bg-success">{{ eni.status }}</span>
-                                        {% elif eni.status == 'in-use' %}
-                                            <span class="badge bg-warning">{{ eni.status }}</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">{{ eni.status }}</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="text-center py-3">
-                        <i class="fas fa-network-wired fa-2x text-muted mb-2"></i>
-                        <p class="text-muted mb-0">No ENIs are currently using this security group.</p>
-                    </div>
-                {% endif %}
+        {% else %}
+            <div class="text-center py-12">
+                <i class="fas fa-network-wired text-gray-300 text-6xl mb-4"></i>
+                <h5 class="text-xl font-semibold text-gray-600 mb-2">No ENIs found</h5>
+                <p class="text-gray-500">No ENIs are currently using this security group.</p>
             </div>
-        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
