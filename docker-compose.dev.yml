@@ -1,0 +1,60 @@
+version: '3.9'
+
+# Development docker-compose configuration
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: aws-inventory-dev-db
+    environment:
+      POSTGRES_DB: awsinventory_dev
+      POSTGRES_USER: awsinventory
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"  # Expose for local tools
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - aws-inventory-dev-network
+    restart: unless-stopped
+
+  # Django Application (Development)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: aws-inventory-dev-web
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      DJANGO_SETTINGS_MODULE: aws_inventory.settings
+      SECRET_KEY: dev-secret-key-not-for-production
+      DEBUG: "True"
+      ALLOWED_HOSTS: "*"
+      DATABASE_URL: postgresql://awsinventory:devpassword@db:5432/awsinventory_dev
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: awsinventory_dev
+      POSTGRES_USER: awsinventory
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reloading
+      - .:/app
+      - /app/.venv  # Exclude venv from mount
+    networks:
+      - aws-inventory-dev-network
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+    driver: local
+
+networks:
+  aws-inventory-dev-network:
+    driver: bridge
