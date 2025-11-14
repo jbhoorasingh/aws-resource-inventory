@@ -4,91 +4,115 @@
 {% block title %}External Dynamic Lists (EDL) - AWS Resource Inventory{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-list-alt"></i> External Dynamic Lists (EDL)</h2>
-    <button class="btn btn-outline-primary" onclick="location.reload()">
+<div class="flex justify-between items-center fade-in mb-8">
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-list-alt text-aws-orange"></i> External Dynamic Lists (EDL)
+        </h2>
+        <p class="text-gray-600">Generate IP lists for Palo Alto Networks firewalls</p>
+    </div>
+    <button onclick="location.reload()"
+            class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
         <i class="fas fa-sync"></i> Refresh
     </button>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="fas fa-info-circle"></i>
-            <strong>Palo Alto EDL Integration:</strong> These endpoints provide IP address lists that can be consumed by Palo Alto firewalls as External Dynamic Lists.
+<div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+    <div class="flex">
+        <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-3"></i>
+        <div>
+            <strong class="text-blue-900">Palo Alto EDL Integration:</strong>
+            <span class="text-blue-800"> These endpoints provide IP address lists that can be consumed by Palo Alto firewalls as External Dynamic Lists.</span>
         </div>
     </div>
 </div>
 
 <!-- Tabs -->
-<ul class="nav nav-tabs mb-3" id="edlTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts" type="button" role="tab">
-            <i class="fas fa-users"></i> Accounts <span class="badge bg-primary ms-1">{{ accounts|length }}</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="security-groups-tab" data-bs-toggle="tab" data-bs-target="#security-groups" type="button" role="tab">
-            <i class="fas fa-shield-alt"></i> Security Groups <span class="badge bg-primary ms-1">{{ security_groups|length }}</span>
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="eni-filter-tab" data-bs-toggle="tab" data-bs-target="#eni-filter" type="button" role="tab">
-            <i class="fas fa-filter"></i> ENI Filter Builder
-        </button>
-    </li>
-</ul>
+<div class="mb-6">
+    <div class="border-b border-gray-200">
+        <nav class="flex -mb-px" id="edlTabs">
+            <button type="button" onclick="switchTab('accounts')" id="accounts-tab"
+                    class="edl-tab active py-3 px-6 border-b-2 border-aws-orange text-aws-orange font-medium text-sm flex items-center gap-2">
+                <i class="fas fa-users"></i> Accounts
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-aws-orange text-white ml-1">
+                    {{ accounts|length }}
+                </span>
+            </button>
+            <button type="button" onclick="switchTab('security-groups')" id="security-groups-tab"
+                    class="edl-tab py-3 px-6 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm flex items-center gap-2">
+                <i class="fas fa-shield-alt"></i> Security Groups
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500 text-white ml-1">
+                    {{ security_groups|length }}
+                </span>
+            </button>
+            <button type="button" onclick="switchTab('eni-filter')" id="eni-filter-tab"
+                    class="edl-tab py-3 px-6 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm flex items-center gap-2">
+                <i class="fas fa-filter"></i> ENI Filter Builder
+            </button>
+        </nav>
+    </div>
+</div>
 
-<div class="tab-content" id="edlTabContent">
+<div id="edlTabContent">
     <!-- Accounts Tab -->
-    <div class="tab-pane fade show active" id="accounts" role="tabpanel">
-        <div class="card">
-            <div class="card-header">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="mb-0"><i class="fas fa-users"></i> Account EDLs</h5>
-                    </div>
-                    <div class="col-md-6">
-                        <input type="text" class="form-control form-control-sm" id="accountSearch" placeholder="Search accounts...">
-                    </div>
+    <div id="accounts" class="tab-content">
+        <div class="bg-white shadow-lg rounded-lg">
+            <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <h5 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-users mr-2 text-aws-orange"></i>Account EDLs
+                    </h5>
+                    <input type="text"
+                           class="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm"
+                           id="accountSearch"
+                           placeholder="Search accounts...">
                 </div>
             </div>
-            <div class="card-body">
+            <div class="p-6">
                 {% if accounts %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover" id="accountsTable">
-                            <thead class="table-light">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="accountsTable">
+                            <thead class="bg-gray-50">
                                 <tr>
-                                    <th>Account</th>
-                                    <th>ENIs</th>
-                                    <th>EDL URL</th>
-                                    <th>Actions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ENIs</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">EDL URL</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody class="bg-white divide-y divide-gray-200">
                                 {% for account in accounts %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ account.account_name|default:"No name" }}</strong>
-                                        <br><small><code>{{ account.account_id }}</code></small>
+                                <tr class="hover:bg-gray-50 transition-colors duration-150">
+                                    <td class="px-6 py-4">
+                                        <strong class="text-gray-900">{{ account.account_name|default:"No name" }}</strong>
+                                        <br><small><code class="bg-gray-100 px-2 py-1 rounded text-xs">{{ account.account_id }}</code></small>
                                     </td>
-                                    <td>
-                                        <span class="badge bg-primary">{{ account.eni_count }}</span>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            {{ account.eni_count }}
+                                        </span>
                                     </td>
-                                    <td>
-                                        <input type="text" class="form-control form-control-sm" readonly
+                                    <td class="px-6 py-4">
+                                        <input type="text"
+                                               class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                                               readonly
                                                value="https://{{ request.get_host }}/edl/account/{{ account.account_id }}"
                                                id="url-account-{{ account.account_id }}">
                                     </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-secondary" onclick="copyUrl('url-account-{{ account.account_id }}')">
+                                    <td class="px-6 py-4">
+                                        <div class="flex gap-1">
+                                            <button onclick="copyUrl('url-account-{{ account.account_id }}')"
+                                                    class="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-copy"></i>
                                             </button>
-                                            <a href="/edl/account/{{ account.account_id }}" class="btn btn-outline-primary" target="_blank">
+                                            <a href="/edl/account/{{ account.account_id }}"
+                                               target="_blank"
+                                               class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="/edl/account/{{ account.account_id }}/json" class="btn btn-outline-info" target="_blank">
+                                            <a href="/edl/account/{{ account.account_id }}/json"
+                                               target="_blank"
+                                               class="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-info"></i>
                                             </a>
                                         </div>
@@ -99,9 +123,9 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-5">
-                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No accounts found</h5>
+                    <div class="text-center py-12">
+                        <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
+                        <h5 class="text-xl font-semibold text-gray-600">No accounts found</h5>
                     </div>
                 {% endif %}
             </div>
@@ -109,59 +133,69 @@
     </div>
 
     <!-- Security Groups Tab -->
-    <div class="tab-pane fade" id="security-groups" role="tabpanel">
-        <div class="card">
-            <div class="card-header">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Security Group EDLs</h5>
-                    </div>
-                    <div class="col-md-6">
-                        <input type="text" class="form-control form-control-sm" id="sgSearch" placeholder="Search security groups...">
-                    </div>
+    <div id="security-groups" class="tab-content hidden">
+        <div class="bg-white shadow-lg rounded-lg">
+            <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <h5 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-shield-alt mr-2 text-aws-orange"></i>Security Group EDLs
+                    </h5>
+                    <input type="text"
+                           class="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm"
+                           id="sgSearch"
+                           placeholder="Search security groups...">
                 </div>
             </div>
-            <div class="card-body">
+            <div class="p-6">
                 {% if security_groups %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover" id="sgTable">
-                            <thead class="table-light">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="sgTable">
+                            <thead class="bg-gray-50">
                                 <tr>
-                                    <th>Security Group</th>
-                                    <th>VPC</th>
-                                    <th>ENIs</th>
-                                    <th>EDL URL</th>
-                                    <th>Actions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Security Group</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VPC</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ENIs</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">EDL URL</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody class="bg-white divide-y divide-gray-200">
                                 {% for sg in security_groups %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ sg.name }}</strong>
-                                        <br><small><code>{{ sg.sg_id }}</code></small>
+                                <tr class="hover:bg-gray-50 transition-colors duration-150">
+                                    <td class="px-6 py-4">
+                                        <strong class="text-gray-900">{{ sg.name }}</strong>
+                                        <br><small><code class="bg-gray-100 px-2 py-1 rounded text-xs">{{ sg.sg_id }}</code></small>
                                     </td>
-                                    <td>
-                                        <code style="font-size: 0.85em;">{{ sg.vpc.vpc_id }}</code>
-                                        <br><small class="text-muted">{{ sg.vpc.region }}</small>
+                                    <td class="px-6 py-4">
+                                        <code class="bg-gray-100 px-2 py-1 rounded text-xs block mb-1">{{ sg.vpc.vpc_id }}</code>
+                                        <small class="text-gray-500">{{ sg.vpc.region }}</small>
                                     </td>
-                                    <td>
-                                        <span class="badge bg-primary">{{ sg.eni_count }}</span>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            {{ sg.eni_count }}
+                                        </span>
                                     </td>
-                                    <td>
-                                        <input type="text" class="form-control form-control-sm" readonly
+                                    <td class="px-6 py-4">
+                                        <input type="text"
+                                               class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                                               readonly
                                                value="https://{{ request.get_host }}/edl/sg/{{ sg.sg_id }}"
                                                id="url-sg-{{ sg.sg_id }}">
                                     </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-secondary" onclick="copyUrl('url-sg-{{ sg.sg_id }}')">
+                                    <td class="px-6 py-4">
+                                        <div class="flex gap-1">
+                                            <button onclick="copyUrl('url-sg-{{ sg.sg_id }}')"
+                                                    class="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-copy"></i>
                                             </button>
-                                            <a href="/edl/sg/{{ sg.sg_id }}" class="btn btn-outline-primary" target="_blank">
+                                            <a href="/edl/sg/{{ sg.sg_id }}"
+                                               target="_blank"
+                                               class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="/edl/sg/{{ sg.sg_id }}/json" class="btn btn-outline-info" target="_blank">
+                                            <a href="/edl/sg/{{ sg.sg_id }}/json"
+                                               target="_blank"
+                                               class="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-info"></i>
                                             </a>
                                         </div>
@@ -172,9 +206,9 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-5">
-                        <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No security groups found</h5>
+                    <div class="text-center py-12">
+                        <i class="fas fa-shield-alt text-gray-300 text-6xl mb-4"></i>
+                        <h5 class="text-xl font-semibold text-gray-600">No security groups found</h5>
                     </div>
                 {% endif %}
             </div>
@@ -182,66 +216,74 @@
     </div>
 
     <!-- ENI Filter Builder Tab -->
-    <div class="tab-pane fade" id="eni-filter" role="tabpanel">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-filter"></i> Build Custom ENI Filter EDL</h5>
+    <div id="eni-filter" class="tab-content hidden">
+        <div class="bg-white shadow-lg rounded-lg">
+            <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+                <h5 class="text-lg font-semibold text-gray-900">
+                    <i class="fas fa-filter mr-2 text-aws-orange"></i>Build Custom ENI Filter EDL
+                </h5>
             </div>
-            <div class="card-body">
-                <p class="text-muted">Create a custom EDL by filtering ENIs based on AWS tags.</p>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Create a custom EDL by filtering ENIs based on AWS tags.</p>
 
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <h6>Add Tag Filters:</h6>
-                        <div id="tagFilters">
-                            <div class="row mb-2 tag-filter-row">
-                                <div class="col-md-5">
-                                    <input type="text" class="form-control tag-key" placeholder="Tag Key (e.g., Environment)">
-                                </div>
-                                <div class="col-md-5">
-                                    <input type="text" class="form-control tag-value" placeholder="Tag Value (e.g., PROD)">
-                                </div>
-                                <div class="col-md-2">
-                                    <button class="btn btn-outline-danger btn-sm" onclick="removeTagFilter(this)" disabled>
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
+                <div class="mb-6">
+                    <h6 class="text-base font-semibold text-gray-900 mb-3">Add Tag Filters:</h6>
+                    <div id="tagFilters">
+                        <div class="grid grid-cols-12 gap-3 mb-3 tag-filter-row">
+                            <div class="col-span-5">
+                                <input type="text"
+                                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange tag-key"
+                                       placeholder="Tag Key (e.g., Environment)">
+                            </div>
+                            <div class="col-span-5">
+                                <input type="text"
+                                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange tag-value"
+                                       placeholder="Tag Value (e.g., PROD)">
+                            </div>
+                            <div class="col-span-2">
+                                <button onclick="removeTagFilter(this)"
+                                        disabled
+                                        class="w-full bg-red-50 text-red-400 px-3 py-2 rounded-md cursor-not-allowed">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
-                        <button class="btn btn-sm btn-outline-primary" onclick="addTagFilter()">
-                            <i class="fas fa-plus"></i> Add Another Tag
+                    </div>
+                    <button onclick="addTagFilter()"
+                            class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm">
+                        <i class="fas fa-plus"></i> Add Another Tag
+                    </button>
+                </div>
+
+                <div class="mb-6">
+                    <h6 class="text-base font-semibold text-gray-900 mb-3">Generated EDL URL:</h6>
+                    <div class="flex gap-2">
+                        <input type="text"
+                               class="block flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange font-mono text-sm"
+                               id="generatedUrl"
+                               readonly
+                               value="https://{{ request.get_host }}/edl/enis/">
+                        <button onclick="copyUrl('generatedUrl')"
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
+                            <i class="fas fa-copy"></i> Copy
                         </button>
+                        <a href="#"
+                           id="viewGeneratedUrl"
+                           target="_blank"
+                           class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
+                            <i class="fas fa-eye"></i> View
+                        </a>
                     </div>
+                    <small class="text-gray-500 mt-1 block">Tags will be added as query parameters</small>
                 </div>
 
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <h6>Generated EDL URL:</h6>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="generatedUrl" readonly
-                                   value="https://{{ request.get_host }}/edl/enis/">
-                            <button class="btn btn-outline-secondary" onclick="copyUrl('generatedUrl')">
-                                <i class="fas fa-copy"></i> Copy
-                            </button>
-                            <a href="#" id="viewGeneratedUrl" class="btn btn-outline-primary" target="_blank">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                        </div>
-                        <small class="text-muted">Tags will be added as query parameters</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <div class="alert alert-secondary">
-                            <strong>Example URLs:</strong>
-                            <ul class="mb-0 mt-2">
-                                <li><code>https://{{ request.get_host }}/edl/enis/?Environment=PROD</code></li>
-                                <li><code>https://{{ request.get_host }}/edl/enis/?Environment=PROD&Application=WebServer</code></li>
-                                <li><code>https://{{ request.get_host }}/edl/enis/?Team=DevOps</code></li>
-                            </ul>
-                        </div>
-                    </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <strong class="text-gray-900 block mb-2">Example URLs:</strong>
+                    <ul class="list-disc list-inside space-y-1 text-sm">
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Environment=PROD</code></li>
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Environment=PROD&Application=WebServer</code></li>
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Team=DevOps</code></li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -249,42 +291,68 @@
 </div>
 
 <!-- Usage Instructions -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-book"></i> Palo Alto Configuration</h5>
-            </div>
-            <div class="card-body">
-                <h6>External Dynamic List Setup:</h6>
-                <ol>
-                    <li>In Palo Alto Panorama or firewall, go to <strong>Objects → External Dynamic Lists</strong></li>
-                    <li>Click <strong>Add</strong> to create a new EDL</li>
-                    <li>Configure the EDL with these settings:
-                        <ul>
-                            <li><strong>Name:</strong> AWS-ENI-IPs (or your preferred name)</li>
-                            <li><strong>Type:</strong> IP List</li>
-                            <li><strong>Source:</strong> <code>https://your-domain.com/edl/account/123456789012</code></li>
-                            <li><strong>Update Schedule:</strong> Every 5 minutes (or as needed)</li>
-                        </ul>
-                    </li>
-                    <li>Use the EDL in security policies to allow/deny traffic from AWS ENI IPs</li>
-                </ol>
-                
-                <h6 class="mt-3">Example Security Policy:</h6>
-                <pre class="bg-light p-3 rounded"><code># Security Policy Rule
+<div class="mt-8">
+    <div class="bg-white shadow-lg rounded-lg">
+        <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+            <h5 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-book mr-2 text-aws-orange"></i>Palo Alto Configuration
+            </h5>
+        </div>
+        <div class="p-6">
+            <h6 class="text-base font-semibold text-gray-900 mb-3">External Dynamic List Setup:</h6>
+            <ol class="list-decimal list-inside space-y-2 text-gray-700 mb-6">
+                <li>In Palo Alto Panorama or firewall, go to <strong>Objects → External Dynamic Lists</strong></li>
+                <li>Click <strong>Add</strong> to create a new EDL</li>
+                <li>Configure the EDL with these settings:
+                    <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                        <li><strong>Name:</strong> AWS-ENI-IPs (or your preferred name)</li>
+                        <li><strong>Type:</strong> IP List</li>
+                        <li><strong>Source:</strong> <code class="bg-gray-100 px-2 py-1 rounded text-xs">https://your-domain.com/edl/account/123456789012</code></li>
+                        <li><strong>Update Schedule:</strong> Every 5 minutes (or as needed)</li>
+                    </ul>
+                </li>
+                <li>Use the EDL in security policies to allow/deny traffic from AWS ENI IPs</li>
+            </ol>
+
+            <h6 class="text-base font-semibold text-gray-900 mb-3">Example Security Policy:</h6>
+            <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code># Security Policy Rule
 Source: AWS-ENI-IPs (EDL)
 Destination: Any
 Service: Any
 Action: Allow</code></pre>
-            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.edl-tab.active {
+    border-color: #FF9900;
+    color: #FF9900;
+}
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
+// Switch between tabs
+function switchTab(tabName) {
+    // Update tab styles
+    document.querySelectorAll('.edl-tab').forEach(t => {
+        t.classList.remove('active', 'border-aws-orange', 'text-aws-orange');
+        t.classList.add('border-transparent', 'text-gray-500');
+    });
+
+    const activeTab = document.getElementById(tabName + '-tab');
+    activeTab.classList.add('active', 'border-aws-orange', 'text-aws-orange');
+    activeTab.classList.remove('border-transparent', 'text-gray-500');
+
+    // Show/hide content
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById(tabName).classList.remove('hidden');
+}
+
 // Copy URL to clipboard
 function copyUrl(inputId) {
     const input = document.getElementById(inputId);
@@ -335,16 +403,16 @@ $(document).ready(function() {
 function addTagFilter() {
     const container = document.getElementById('tagFilters');
     const newRow = document.createElement('div');
-    newRow.className = 'row mb-2 tag-filter-row';
+    newRow.className = 'grid grid-cols-12 gap-3 mb-3 tag-filter-row';
     newRow.innerHTML = `
-        <div class="col-md-5">
-            <input type="text" class="form-control tag-key" placeholder="Tag Key (e.g., Environment)">
+        <div class="col-span-5">
+            <input type="text" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange tag-key" placeholder="Tag Key (e.g., Environment)">
         </div>
-        <div class="col-md-5">
-            <input type="text" class="form-control tag-value" placeholder="Tag Value (e.g., PROD)">
+        <div class="col-span-5">
+            <input type="text" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange tag-value" placeholder="Tag Value (e.g., PROD)">
         </div>
-        <div class="col-md-2">
-            <button class="btn btn-outline-danger btn-sm" onclick="removeTagFilter(this)">
+        <div class="col-span-2">
+            <button onclick="removeTagFilter(this)" class="w-full bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-md transition-all duration-200">
                 <i class="fas fa-times"></i>
             </button>
         </div>
