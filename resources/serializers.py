@@ -3,7 +3,7 @@ Serializers for AWS resources API
 """
 from rest_framework import serializers
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, EC2Instance, ENI,
+    AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
 
@@ -36,16 +36,35 @@ class SubnetSerializer(serializers.ModelSerializer):
         ]
 
 
+class SecurityGroupRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SecurityGroupRule
+        fields = [
+            'id', 'rule_type', 'protocol', 'from_port', 'to_port',
+            'source_type', 'source_value', 'description'
+        ]
+
+
 class SecurityGroupSerializer(serializers.ModelSerializer):
     vpc_id = serializers.CharField(source='vpc.vpc_id', read_only=True)
     vpc_owner_account = serializers.CharField(source='vpc.owner_account', read_only=True)
+    ingress_rules = serializers.SerializerMethodField()
+    egress_rules = serializers.SerializerMethodField()
 
     class Meta:
         model = SecurityGroup
         fields = [
             'id', 'sg_id', 'vpc', 'vpc_id', 'vpc_owner_account', 'name', 'description', 'tags',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'ingress_rules', 'egress_rules'
         ]
+
+    def get_ingress_rules(self, obj):
+        rules = obj.rules.filter(rule_type='ingress')
+        return SecurityGroupRuleSerializer(rules, many=True).data
+
+    def get_egress_rules(self, obj):
+        rules = obj.rules.filter(rule_type='egress')
+        return SecurityGroupRuleSerializer(rules, many=True).data
 
 
 class EC2InstanceSerializer(serializers.ModelSerializer):

@@ -41,33 +41,29 @@ def edl_account_ips(request, account_id):
 @cache_page(300)  # Cache for 5 minutes
 def edl_security_group_ips(request, sg_id):
     """EDL endpoint for security group IP addresses"""
-    try:
-        # Get security group
-        security_group = get_object_or_404(SecurityGroup, sg_id=sg_id)
-        
-        # Get all ENIs associated with this security group
-        enis = ENI.objects.filter(
-            eni_security_groups__security_group=security_group
-        ).select_related('subnet').prefetch_related('secondary_ips')
-        
-        ip_lines = []
-        
-        for eni in enis:
-            # Add primary IP
-            if eni.private_ip_address:
-                ip_lines.append(f"{eni.private_ip_address} # {eni.eni_id}, primary")
-            
-            # Add secondary IPs
-            for secondary_ip in eni.secondary_ips.all():
-                ip_lines.append(f"{secondary_ip.ip_address} # {eni.eni_id}, secondary")
-        
-        # Create response
-        response = HttpResponse('\n'.join(ip_lines), content_type='text/plain; charset=utf-8')
-        response['X-Content-Type-Options'] = 'nosniff'
-        return response
-        
-    except Exception as e:
-        return HttpResponse(f"Error generating EDL: {str(e)}", status=500)
+    # Get security group (will raise Http404 if not found)
+    security_group = get_object_or_404(SecurityGroup, sg_id=sg_id)
+
+    # Get all ENIs associated with this security group
+    enis = ENI.objects.filter(
+        eni_security_groups__security_group=security_group
+    ).select_related('subnet').prefetch_related('secondary_ips')
+
+    ip_lines = []
+
+    for eni in enis:
+        # Add primary IP
+        if eni.private_ip_address:
+            ip_lines.append(f"{eni.private_ip_address} # {eni.eni_id}, primary")
+
+        # Add secondary IPs
+        for secondary_ip in eni.secondary_ips.all():
+            ip_lines.append(f"{secondary_ip.ip_address} # {eni.eni_id}, secondary")
+
+    # Create response
+    response = HttpResponse('\n'.join(ip_lines), content_type='text/plain; charset=utf-8')
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 def edl_summary(request):
@@ -120,81 +116,75 @@ def edl_summary(request):
 
 def edl_account_json(request, account_id):
     """JSON endpoint for account EDL metadata"""
-    try:
-        account = get_object_or_404(AWSAccount, account_id=account_id)
-        
-        # Get ENI count
-        eni_count = ENI.objects.filter(
-            owner_account=account_id
-        ).count()
-        
-        # Get IP count (primary + secondary)
-        primary_ips = ENI.objects.filter(
-            owner_account=account_id,
-            private_ip_address__isnull=False
-        ).exclude(private_ip_address='').count()
-        
-        secondary_ips = ENISecondaryIP.objects.filter(
-            eni__owner_account=account_id
-        ).count()
-        
-        total_ips = primary_ips + secondary_ips
-        
-        data = {
-            'account_id': account_id,
-            'account_name': account.account_name or '',
-            'edl_url': f"/edl/account/{account_id}",
-            'eni_count': eni_count,
-            'total_ips': total_ips,
-            'primary_ips': primary_ips,
-            'secondary_ips': secondary_ips,
-            'last_updated': account.last_polled.isoformat() if account.last_polled else None,
-        }
-        
-        return JsonResponse(data)
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    # Get account (will raise Http404 if not found)
+    account = get_object_or_404(AWSAccount, account_id=account_id)
+
+    # Get ENI count
+    eni_count = ENI.objects.filter(
+        owner_account=account_id
+    ).count()
+
+    # Get IP count (primary + secondary)
+    primary_ips = ENI.objects.filter(
+        owner_account=account_id,
+        private_ip_address__isnull=False
+    ).count()
+
+    secondary_ips = ENISecondaryIP.objects.filter(
+        eni__owner_account=account_id
+    ).count()
+
+    total_ips = primary_ips + secondary_ips
+
+    data = {
+        'account_id': account_id,
+        'account_name': account.account_name or '',
+        'edl_url': f"/edl/account/{account_id}",
+        'eni_count': eni_count,
+        'total_ips': total_ips,
+        'primary_ips': primary_ips,
+        'secondary_ips': secondary_ips,
+        'last_updated': account.last_polled.isoformat() if account.last_polled else None,
+    }
+
+    return JsonResponse(data)
 
 
 def edl_security_group_json(request, sg_id):
     """JSON endpoint for security group EDL metadata"""
-    try:
-        security_group = get_object_or_404(SecurityGroup, sg_id=sg_id)
+    # Get security group (will raise Http404 if not found)
+    security_group = get_object_or_404(SecurityGroup, sg_id=sg_id)
 
-        # Get ENI count
-        eni_count = ENI.objects.filter(
-            eni_security_groups__security_group=security_group
-        ).count()
+    # Get ENI count
+    eni_count = ENI.objects.filter(
+        eni_security_groups__security_group=security_group
+    ).count()
 
-        # Get IP count (primary + secondary)
-        primary_ips = ENI.objects.filter(
-            eni_security_groups__security_group=security_group,
-            private_ip_address__isnull=False
-        ).exclude(private_ip_address='').count()
+    # Get IP count (primary + secondary)
+    primary_ips = ENI.objects.filter(
+        eni_security_groups__security_group=security_group,
+        private_ip_address__isnull=False
+    ).count()
 
-        secondary_ips = ENISecondaryIP.objects.filter(
-            eni__eni_security_groups__security_group=security_group
-        ).count()
+    secondary_ips = ENISecondaryIP.objects.filter(
+        eni__eni_security_groups__security_group=security_group
+    ).count()
 
-        total_ips = primary_ips + secondary_ips
+    total_ips = primary_ips + secondary_ips
 
-        data = {
-            'sg_id': sg_id,
-            'sg_name': security_group.name,
-            'vpc_id': security_group.vpc.vpc_id,
-            'edl_url': f"/edl/sg/{sg_id}",
-            'eni_count': eni_count,
-            'total_ips': total_ips,
-            'primary_ips': primary_ips,
-            'secondary_ips': secondary_ips,
-            'last_updated': security_group.updated_at.isoformat(),
-        }
+    data = {
+        'sg_id': sg_id,
+        'sg_name': security_group.name,
+        'vpc_id': security_group.vpc.vpc_id,
+        'edl_url': f"/edl/sg/{sg_id}",
+        'eni_count': eni_count,
+        'total_ips': total_ips,
+        'primary_ips': primary_ips,
+        'secondary_ips': secondary_ips,
+        'last_updated': security_group.updated_at.isoformat(),
+    }
 
-        return JsonResponse(data)
-
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse(data)
 
 
 @cache_page(300)  # Cache for 5 minutes
@@ -263,7 +253,7 @@ def edl_enis_by_tags_json(request):
         # Get IP count (primary + secondary)
         primary_ips = enis.filter(
             private_ip_address__isnull=False
-        ).exclude(private_ip_address='').count()
+        ).count()
 
         secondary_ips = ENISecondaryIP.objects.filter(
             eni__in=enis
