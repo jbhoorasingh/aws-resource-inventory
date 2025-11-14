@@ -4,165 +4,187 @@
 {% block title %}Security Groups - AWS Resource Inventory{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-shield-alt"></i> Security Groups</h2>
-    <div class="d-flex gap-2">
-        <div class="input-group" style="width: 300px;">
-            <input type="text" class="form-control" id="searchInput" placeholder="Search Security Groups...">
-            <button class="btn btn-outline-secondary" type="button" id="searchBtn">
-                <i class="fas fa-search"></i>
-            </button>
+<div class="flex justify-between items-center fade-in mb-8">
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-shield-alt text-aws-orange"></i> Security Groups
+        </h2>
+        <p class="text-gray-600">Manage and review security group rules and policies</p>
+    </div>
+    <div class="flex gap-2">
+        <div class="relative" style="width: 300px;">
+            <input type="text"
+                   class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-aws-orange focus:border-aws-orange"
+                   id="searchInput"
+                   placeholder="Search Security Groups...">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-search text-gray-400"></i>
+            </div>
         </div>
-        <button class="btn btn-outline-primary" onclick="location.reload()">
+        <button onclick="location.reload()"
+                class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
             <i class="fas fa-sync"></i> Refresh
         </button>
     </div>
 </div>
 
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3">
-                        <h5 class="text-primary">{{ total_security_groups }}</h5>
-                        <small class="text-muted">Total Security Groups</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5 class="text-success">{{ total_ingress_rules }}</h5>
-                        <small class="text-muted">Ingress Rules</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5 class="text-info">{{ total_egress_rules }}</h5>
-                        <small class="text-muted">Egress Rules</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5 class="text-warning">{{ total_regions }}</h5>
-                        <small class="text-muted">Regions</small>
-                    </div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 fade-in">
+    <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+        <h3 class="text-3xl font-bold text-gray-900 mb-2">{{ total_security_groups }}</h3>
+        <p class="text-gray-600"><i class="fas fa-shield-alt mr-2 text-blue-500"></i>Total Groups</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+        <h3 class="text-3xl font-bold text-gray-900 mb-2">{{ total_ingress_rules }}</h3>
+        <p class="text-gray-600"><i class="fas fa-arrow-down mr-2 text-green-500"></i>Ingress Rules</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-indigo-500">
+        <h3 class="text-3xl font-bold text-gray-900 mb-2">{{ total_egress_rules }}</h3>
+        <p class="text-gray-600"><i class="fas fa-arrow-up mr-2 text-indigo-500"></i>Egress Rules</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-yellow-500">
+        <h3 class="text-3xl font-bold text-gray-900 mb-2">{{ total_regions }}</h3>
+        <p class="text-gray-600"><i class="fas fa-map-marked-alt mr-2 text-yellow-500"></i>Regions</p>
+    </div>
+</div>
+
+<div class="bg-white shadow-lg rounded-lg mb-6">
+    <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <h5 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-filter mr-2 text-aws-orange"></i>Filter by Tags
+        </h5>
+    </div>
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tag Key</label>
+                <input type="text"
+                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange"
+                       id="tagKeyFilter"
+                       placeholder="e.g., Environment">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tag Value</label>
+                <input type="text"
+                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange"
+                       id="tagValueFilter"
+                       placeholder="e.g., PROD">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label>
+                <div class="flex gap-2">
+                    <button id="applyTagFilter"
+                            class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
+                        <i class="fas fa-search"></i> Apply Filter
+                    </button>
+                    <button id="clearTagFilter"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-filter"></i> Filter by Tags</h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Tag Key</label>
-                        <input type="text" class="form-control" id="tagKeyFilter" placeholder="e.g., Environment">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Tag Value</label>
-                        <input type="text" class="form-control" id="tagValueFilter" placeholder="e.g., PROD">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">&nbsp;</label>
-                        <div>
-                            <button class="btn btn-primary" id="applyTagFilter">
-                                <i class="fas fa-search"></i> Apply Filter
-                            </button>
-                            <button class="btn btn-secondary" id="clearTagFilter">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="bg-white shadow-lg rounded-lg">
+    <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <h5 class="text-lg font-semibold text-gray-900">Security Groups</h5>
     </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Security Groups</h5>
-            </div>
-            <div class="card-body">
-                {% if security_groups %}
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="sgTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Security Group</th>
-                                    <th>VPC</th>
-                                    <th>Rules</th>
-                                    <th>Owner Account</th>
-                                    <th>Region</th>
-                                    <th>Tags</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for sg in security_groups %}
-                                <tr>
-                                    <td>
-                                        <div>
-                                            <a href="{% url 'security_group_detail' sg.id %}" class="text-decoration-none">
-                                                <strong>{{ sg.name }}</strong>
-                                            </a>
-                                            <br><code>{{ sg.sg_id }}</code>
-                                            {% if sg.description %}
-                                                <br><small class="text-muted">{{ sg.description }}</small>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <code>{{ sg.vpc.vpc_id }}</code>
-                                        <br><small class="text-muted">{{ sg.vpc.cidr_block }}</small>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex gap-1">
-                                            <span class="badge bg-success">{{ sg.ingress_count }} Ingress</span>
-                                            <span class="badge bg-info">{{ sg.egress_count }} Egress</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <code>{{ sg.vpc.owner_account }}</code>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-secondary">{{ sg.vpc.region }}</span>
-                                    </td>
-                                    <td data-tags='{{ sg.tags|safe }}'>
-                                        {% if sg.tags %}
-                                            {% for key, value in sg.tags.items %}
-                                                <span class="badge bg-light text-dark border mb-1" style="font-size: 0.7em;">
-                                                    <strong>{{ key }}:</strong> {{ value }}
+    <div class="p-6">
+        {% if security_groups %}
+            <div class="overflow-x-auto -mx-6 px-6">
+                <table class="w-full divide-y divide-gray-200" id="sgTable">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Security Group</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VPC</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rules</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for sg in security_groups %}
+                        <tr class="hover:bg-gray-50 transition-colors duration-150">
+                            <td class="px-3 py-3">
+                                <a href="{% url 'security_group_detail' sg.id %}" class="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm block">
+                                    {{ sg.name|truncatechars:25 }}
+                                </a>
+                                <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono text-gray-600 mt-1 inline-block">{{ sg.sg_id }}</code>
+                                {% if sg.description %}
+                                    <br><small class="text-gray-500 text-xs mt-1 block">{{ sg.description|truncatechars:30 }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3">
+                                <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono block mb-1">{{ sg.vpc.vpc_id }}</code>
+                                <small class="text-gray-500 text-xs">{{ sg.vpc.cidr_block }}</small>
+                            </td>
+                            <td class="px-3 py-3">
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                        {{ sg.ingress_count }} In
+                                    </span>
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                        {{ sg.egress_count }} Out
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-3">
+                                <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{{ sg.vpc.owner_account }}</code>
+                            </td>
+                            <td class="px-3 py-3">
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ sg.vpc.region }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-3" data-tags='{{ sg.tags|safe }}'>
+                                {% if sg.tags %}
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for key, value in sg.tags.items %}
+                                            {% if forloop.counter <= 2 %}
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                                                    <strong class="text-xs">{{ key|truncatechars:8 }}:</strong>&nbsp;<span class="text-xs">{{ value|truncatechars:8 }}</span>
                                                 </span>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'security_group_detail' sg.id %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye"></i> View Rules
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="text-center py-5">
-                        <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No Security Groups found</h5>
-                        <p class="text-muted">Poll an AWS account to discover security groups and their rules.</p>
-                        <a href="{% url 'accounts' %}" class="btn btn-primary">
-                            <i class="fas fa-users"></i> Go to Accounts
-                        </a>
-                    </div>
-                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        {% with total_tags=sg.tags|length %}
+                                            {% if total_tags > 2 %}
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700" title="View details for more tags">
+                                                    +more
+                                                </span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-gray-400 text-xs">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3">
+                                <a href="{% url 'security_group_detail' sg.id %}"
+                                   class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-all duration-200 inline-flex items-center gap-1 text-xs">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
-        </div>
+        {% else %}
+            <div class="text-center py-12">
+                <div class="mb-4">
+                    <i class="fas fa-shield-alt text-gray-300 text-6xl"></i>
+                </div>
+                <h5 class="text-xl font-semibold text-gray-600 mb-3">No Security Groups found</h5>
+                <p class="text-gray-500 mb-6">Poll an AWS account to discover security groups and their rules.</p>
+                <a href="{% url 'accounts' %}"
+                   class="bg-aws-orange hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-all duration-200 inline-flex items-center gap-2">
+                    <i class="fas fa-users"></i> Go to Accounts
+                </a>
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -225,8 +247,8 @@ $(document).ready(function() {
 <script>
 $(document).ready(function() {
     // Search functionality
-    $('#searchInput, #searchBtn').on('input click', function() {
-        const searchTerm = $('#searchInput').val().toLowerCase();
+    $('#searchInput').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
         $('#sgTable tbody tr').each(function() {
             const rowText = $(this).text().toLowerCase();
             if (rowText.includes(searchTerm)) {
