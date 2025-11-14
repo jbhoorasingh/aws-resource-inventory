@@ -21,6 +21,7 @@ class AWSAccountViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AWSAccount.objects.all()
     serializer_class = AWSAccountSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
     search_fields = ['account_id', 'account_name']
     ordering_fields = ['account_id', 'account_name', 'created_at']
     ordering = ['account_id']
@@ -47,7 +48,7 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class SecurityGroupViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = SecurityGroup.objects.select_related('vpc').all()
+    queryset = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all()
     serializer_class = SecurityGroupSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vpc', 'vpc__region']
@@ -104,7 +105,7 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def with_public_ip(self, request):
         """Find ENIs with public IP addresses"""
-        enis = self.get_queryset().exclude(public_ip_address__isnull=True).exclude(public_ip_address='')
+        enis = self.get_queryset().filter(public_ip_address__isnull=False)
         serializer = self.get_serializer(enis, many=True)
         return Response(serializer.data)
 
@@ -131,8 +132,8 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
         total_enis = ENI.objects.count()
         
         # Count IP addresses
-        total_private_ips = ENI.objects.exclude(private_ip_address__isnull=True).exclude(private_ip_address='').count()
-        total_public_ips = ENI.objects.exclude(public_ip_address__isnull=True).exclude(public_ip_address='').count()
+        total_private_ips = ENI.objects.filter(private_ip_address__isnull=False).count()
+        total_public_ips = ENI.objects.filter(public_ip_address__isnull=False).count()
         
         # Get unique regions and accounts
         regions = list(VPC.objects.values_list('region', flat=True).distinct())
