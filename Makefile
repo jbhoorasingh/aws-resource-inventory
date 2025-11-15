@@ -19,7 +19,14 @@ build: ## Build production containers
 
 up: ## Start production services
 	@echo "$(BLUE)Starting production services...$(NC)"
-	docker-compose --env-file .env.production up -d
+	@if [ ! -f .env ]; then \
+		echo "$(RED)Error: .env file not found!$(NC)"; \
+		echo "$(BLUE)Creating .env from .env.example...$(NC)"; \
+		cp .env.example .env; \
+		echo "$(BLUE)Please edit .env file with your configuration before starting.$(NC)"; \
+		exit 1; \
+	fi
+	docker-compose up -d
 	@echo "$(GREEN)Services started! Access at http://localhost$(NC)"
 
 down: ## Stop production services
@@ -144,7 +151,17 @@ update-deps: ## Update dependencies
 	poetry export -f requirements.txt --output requirements.txt --without-hashes
 
 # Quick commands
-quick-start: build up migrate collectstatic ## Build, start, migrate, and collect static files
+quick-start: ## Build, start, migrate, and collect static files
+	@if [ ! -f .env ]; then \
+		echo "$(BLUE)Creating .env from .env.example...$(NC)"; \
+		cp .env.example .env; \
+		echo "$(RED)Please edit .env file with your SECRET_KEY and database password!$(NC)"; \
+		exit 1; \
+	fi
+	@$(MAKE) build
+	@$(MAKE) up
+	@$(MAKE) migrate
+	@$(MAKE) collectstatic
 	@echo "$(GREEN)Application ready at http://localhost$(NC)"
 
 quick-dev: dev-up ## Quick start for development
