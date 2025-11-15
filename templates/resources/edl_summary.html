@@ -96,7 +96,7 @@
                                         <input type="text"
                                                class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                                                readonly
-                                               value="https://{{ request.get_host }}/edl/account/{{ account.account_id }}"
+                                               value="https://{{ request.get_host }}/edl/account/{{ account.account_id }}?token={{ api_token }}"
                                                id="url-account-{{ account.account_id }}">
                                     </td>
                                     <td class="px-6 py-4">
@@ -105,7 +105,7 @@
                                                     class="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-copy"></i>
                                             </button>
-                                            <a href="/edl/account/{{ account.account_id }}"
+                                            <a href="/edl/account/{{ account.account_id }}?token={{ api_token }}"
                                                target="_blank"
                                                class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-eye"></i>
@@ -179,7 +179,7 @@
                                         <input type="text"
                                                class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
                                                readonly
-                                               value="https://{{ request.get_host }}/edl/sg/{{ sg.sg_id }}"
+                                               value="https://{{ request.get_host }}/edl/sg/{{ sg.sg_id }}?token={{ api_token }}"
                                                id="url-sg-{{ sg.sg_id }}">
                                     </td>
                                     <td class="px-6 py-4">
@@ -188,7 +188,7 @@
                                                     class="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-copy"></i>
                                             </button>
-                                            <a href="/edl/sg/{{ sg.sg_id }}"
+                                            <a href="/edl/sg/{{ sg.sg_id }}?token={{ api_token }}"
                                                target="_blank"
                                                class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded transition-all duration-200">
                                                 <i class="fas fa-eye"></i>
@@ -262,7 +262,7 @@
                                class="block flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange font-mono text-sm"
                                id="generatedUrl"
                                readonly
-                               value="https://{{ request.get_host }}/edl/enis/">
+                               value="https://{{ request.get_host }}/edl/enis/?token={{ api_token }}">
                         <button onclick="copyUrl('generatedUrl')"
                                 class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
                             <i class="fas fa-copy"></i> Copy
@@ -280,9 +280,9 @@
                 <div class="bg-gray-50 p-4 rounded-lg">
                     <strong class="text-gray-900 block mb-2">Example URLs:</strong>
                     <ul class="list-disc list-inside space-y-1 text-sm">
-                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Environment=PROD</code></li>
-                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Environment=PROD&Application=WebServer</code></li>
-                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?Team=DevOps</code></li>
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?token=YOUR_TOKEN&Environment=PROD</code></li>
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?token=YOUR_TOKEN&Environment=PROD&Application=WebServer</code></li>
+                        <li><code class="bg-white px-2 py-1 rounded text-xs">https://{{ request.get_host }}/edl/enis/?token=YOUR_TOKEN&Team=DevOps</code></li>
                     </ul>
                 </div>
             </div>
@@ -436,7 +436,7 @@ function attachTagInputListeners(row) {
 
 function updateGeneratedUrl() {
     const baseUrl = 'https://{{ request.get_host }}/edl/enis/';
-    const params = [];
+    const params = ['token={{ api_token }}'];  // Always include token as first parameter
 
     document.querySelectorAll('.tag-filter-row').forEach(row => {
         const key = row.querySelector('.tag-key').value.trim();
@@ -446,7 +446,7 @@ function updateGeneratedUrl() {
         }
     });
 
-    const generatedUrl = params.length > 0 ? baseUrl + '?' + params.join('&') : baseUrl;
+    const generatedUrl = baseUrl + '?' + params.join('&');
     document.getElementById('generatedUrl').value = generatedUrl;
     document.getElementById('viewGeneratedUrl').href = generatedUrl;
 }

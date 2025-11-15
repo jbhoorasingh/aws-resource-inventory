@@ -12,6 +12,7 @@
         </h2>
         <p class="text-gray-600">Manage and monitor your AWS accounts across regions</p>
     </div>
+    {% if perms.resources.can_poll_accounts or user.is_superuser %}
     <div class="flex gap-2">
         <button onclick="document.getElementById('pollModal').classList.remove('hidden')"
                 class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
@@ -22,6 +23,11 @@
             <i class="fas fa-layer-group"></i> Bulk Poll Accounts
         </button>
     </div>
+    {% else %}
+    <div class="text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+        <i class="fas fa-info-circle mr-1"></i> Read-only access
+    </div>
+    {% endif %}
 </div>
 
 <div class="bg-white shadow-lg rounded-lg fade-in">
@@ -99,10 +105,16 @@
                                 <span class="text-gray-900 text-xs">{{ account.created_at|date:"M d, Y" }}</span>
                             </td>
                             <td class="px-3 py-3">
+                                {% if perms.resources.can_poll_accounts or user.is_superuser %}
                                 <button onclick="pollAccount('{{ account.account_id }}', '{{ account.account_name|default:"" }}')"
                                         class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-all duration-200 text-xs">
                                     <i class="fas fa-sync"></i> Poll
                                 </button>
+                                {% else %}
+                                <span class="text-gray-400 text-xs">
+                                    <i class="fas fa-lock"></i>
+                                </span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -116,6 +128,7 @@
                 </div>
                 <h4 class="text-xl font-semibold text-gray-600 mb-3">No Accounts Yet</h4>
                 <p class="text-gray-500 mb-6">Get started by polling your AWS accounts to discover and track resources.</p>
+                {% if perms.resources.can_poll_accounts or user.is_superuser %}
                 <div class="flex gap-3 justify-center">
                     <button onclick="document.getElementById('pollModal').classList.remove('hidden')"
                             class="bg-aws-orange hover:bg-orange-600 text-white px-6 py-3 rounded-lg transition-all duration-200 text-base">
@@ -126,6 +139,11 @@
                         <i class="fas fa-layer-group mr-2"></i> Bulk Import
                     </button>
                 </div>
+                {% else %}
+                <p class="text-gray-400 text-sm">
+                    <i class="fas fa-lock mr-1"></i> You don't have permission to poll accounts. Contact your administrator.
+                </p>
+                {% endif %}
             </div>
         {% endif %}
     </div>

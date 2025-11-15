@@ -3,6 +3,8 @@ Frontend views for AWS Resource Inventory
 """
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required, permission_required
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -16,6 +18,7 @@ from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup,
 logger = logging.getLogger(__name__)
 
 
+@login_required
 def accounts_view(request):
     """Display accounts page with polling functionality"""
     # Since we removed the account->vpc relationship, we need to count ENIs differently
@@ -41,6 +44,7 @@ def accounts_view(request):
     return render(request, 'resources/accounts.html', context)
 
 
+@login_required
 def enis_view(request):
     """Display ENIs page with detailed information"""
     enis = ENI.objects.select_related(
@@ -76,6 +80,8 @@ def enis_view(request):
     return render(request, 'resources/enis.html', context)
 
 
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
 @csrf_exempt
 @require_http_methods(["POST"])
 def poll_account_view(request):
@@ -159,6 +165,8 @@ def poll_account_view(request):
     return redirect('accounts')
 
 
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
 @csrf_exempt
 @require_http_methods(["POST"])
 def bulk_poll_accounts_view(request):
@@ -321,6 +329,7 @@ def bulk_poll_accounts_view(request):
     return redirect('accounts')
 
 
+@login_required
 def api_enis_json(request):
     """API endpoint for ENIs data (for AJAX requests)"""
     enis = ENI.objects.select_related(
@@ -354,6 +363,7 @@ def api_enis_json(request):
     return JsonResponse({'enis': data})
 
 
+@login_required
 def api_accounts_json(request):
     """API endpoint for accounts data (for AJAX requests)"""
     accounts = AWSAccount.objects.all().order_by('-last_polled', 'account_id')
@@ -382,6 +392,7 @@ def api_accounts_json(request):
     return JsonResponse({'accounts': data})
 
 
+@login_required
 def security_groups_view(request):
     """Display security groups page with rules information"""
     security_groups = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all().order_by('name')
@@ -407,6 +418,7 @@ def security_groups_view(request):
     return render(request, 'resources/security_groups.html', context)
 
 
+@login_required
 def security_group_detail_view(request, sg_id):
     """Display detailed security group rules"""
     try:
@@ -432,6 +444,7 @@ def security_group_detail_view(request, sg_id):
         return redirect('security_groups')
 
 
+@login_required
 def ec2_instances_view(request):
     """Display EC2 instances page with detailed information"""
     instances = EC2Instance.objects.select_related(
@@ -456,6 +469,7 @@ def ec2_instances_view(request):
     return render(request, 'resources/ec2_instances.html', context)
 
 
+@login_required
 def ec2_instance_detail_view(request, instance_id):
     """Display detailed EC2 instance information"""
     try:
@@ -498,6 +512,7 @@ def ec2_instance_detail_view(request, instance_id):
         return redirect('ec2_instances')
 
 
+@login_required
 def eni_detail_view(request, eni_id):
     """Display detailed ENI information"""
     try:
@@ -529,3 +544,61 @@ def eni_detail_view(request, eni_id):
     except ENI.DoesNotExist:
         messages.error(request, 'ENI not found.')
         return redirect('enis')
+
+# Authentication Views
+
+def login_view(request):
+    """User login view"""
+    if request.user.is_authenticated:
+        return redirect('accounts')
+    
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        next_url = request.POST.get('next') or request.GET.get('next') or 'accounts'
+        
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            messages.success(request, f'Welcome back, {user.get_full_name() or user.username}!')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Invalid username or password.')
+    
+    context = {
+        'next': request.GET.get('next', 'accounts')
+    }
+    return render(request, 'resources/login.html', context)
+
+
+def logout_view(request):
+    """User logout view"""
+    logout(request)
+    messages.info(request, 'You have been logged out.')
+    return redirect('login')
+
+
+@login_required
+def profile_view(request):
+    """User profile view with API token management"""
+    user = request.user
+
+    # Get DRF auth token
+    from rest_framework.authtoken.models import Token
+    drf_token, created = Token.objects.get_or_create(user=user)
+
+    context = {
+        'user': user,
+        'api_token': user.profile.api_token,
+        'drf_token': drf_token.key,
+    }
+    return render(request, 'resources/profile.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def regenerate_token_view(request):
+    """Regenerate user's API token"""
+    new_token = request.user.profile.regenerate_token()
+    messages.success(request, 'Your API token has been regenerated!')
+    return redirect('profile')

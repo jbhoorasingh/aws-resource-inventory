@@ -2,11 +2,38 @@
 Django admin configuration for AWS resources
 """
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
 from django.utils.html import format_html
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
+    UserProfile, AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
     ENISecondaryIP, ENISecurityGroup
 )
+
+
+# User Profile Admin (inline with User)
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile'
+    fields = ['api_token', 'created_at', 'updated_at']
+    readonly_fields = ['api_token', 'created_at', 'updated_at']
+
+
+class UserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline,)
+    list_display = ['username', 'email', 'first_name', 'last_name', 'is_staff', 'can_poll']
+
+    def can_poll(self, obj):
+        """Check if user has permission to poll accounts"""
+        return obj.has_perm('resources.can_poll_accounts')
+    can_poll.boolean = True
+    can_poll.short_description = 'Can Poll Accounts'
+
+
+# Re-register UserAdmin
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
 
 
 @admin.register(AWSAccount)
