@@ -33,13 +33,13 @@ cd aws-resource-inventory
 
 ```bash
 # Copy the example environment file
-cp .env.production.example .env.production
+cp .env.example .env
 
 # Edit the file with your configuration
-nano .env.production
+nano .env
 ```
 
-**Important:** Update these values in `.env.production`:
+**Important:** Update these values in `.env`:
 
 - `SECRET_KEY` - Generate a secure random key
 - `POSTGRES_PASSWORD` - Set a strong database password
@@ -57,7 +57,7 @@ python3 -c 'from django.core.management.utils import get_random_secret_key; prin
 
 ```bash
 # Build and start all services
-docker-compose --env-file .env.production up -d
+docker-compose --env-file .env up -d
 
 # View logs
 docker-compose logs -f
@@ -126,7 +126,7 @@ The PostgreSQL database is only accessible from within the Docker network by def
 
 ### Environment Variables for Production
 
-Create `.env.production` with these settings:
+Create `.env` with these settings:
 
 ```env
 # Django Settings
@@ -154,7 +154,7 @@ AWS_DEFAULT_REGION=us-east-1
 
 ```bash
 # Start services in detached mode
-docker-compose --env-file .env.production up -d
+docker-compose --env-file .env up -d
 
 # Check service status
 docker-compose ps
@@ -424,7 +424,7 @@ docker-compose down -v
 
 # Rebuild and start fresh
 docker-compose build --no-cache
-docker-compose --env-file .env.production up -d
+docker-compose --env-file .env up -d
 ```
 
 ## Production Checklist
