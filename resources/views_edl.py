@@ -1,14 +1,51 @@
 """
 External Dynamic List (EDL) views for Palo Alto integration
 """
+from functools import wraps
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 from django.db.models import Q
-from .models import AWSAccount, ENI, ENISecondaryIP, SecurityGroup
+from .models import AWSAccount, ENI, ENISecondaryIP, SecurityGroup, UserProfile
 
 
+def require_api_token(view_func):
+    """
+    Decorator to require API token authentication for EDL endpoints
+    Token should be passed as a query parameter: ?token=YOUR_TOKEN
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # Get token from query parameter
+        token = request.GET.get('token')
+
+        if not token:
+            return HttpResponse(
+                'Unauthorized: API token required. Add ?token=YOUR_TOKEN to the URL.',
+                status=401,
+                content_type='text/plain'
+            )
+
+        # Validate token
+        try:
+            profile = UserProfile.objects.get(api_token=token)
+            # Attach user to request for potential logging
+            request.user = profile.user
+        except UserProfile.DoesNotExist:
+            return HttpResponse(
+                'Unauthorized: Invalid API token.',
+                status=401,
+                content_type='text/plain'
+            )
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+@require_api_token
 @cache_page(300)  # Cache for 5 minutes
 def edl_account_ips(request, account_id):
     """EDL endpoint for account IP addresses"""
@@ -38,6 +75,7 @@ def edl_account_ips(request, account_id):
         return HttpResponse(f"Error generating EDL: {str(e)}", status=500)
 
 
+@require_api_token
 @cache_page(300)  # Cache for 5 minutes
 def edl_security_group_ips(request, sg_id):
     """EDL endpoint for security group IP addresses"""
@@ -66,6 +104,7 @@ def edl_security_group_ips(request, sg_id):
     return response
 
 
+@login_required
 def edl_summary(request):
     """EDL summary page with links to all available EDLs"""
     # Get all unique owner accounts from ENIs (regardless of AWSAccount table)
@@ -107,9 +146,13 @@ def edl_summary(request):
             eni_security_groups__security_group=sg
         ).count()
     
+    # Get user's API token
+    api_token = request.user.profile.api_token if hasattr(request.user, 'profile') else ''
+
     context = {
         'accounts': accounts_with_enis,
         'security_groups': security_groups_with_enis,
+        'api_token': api_token,
     }
     return render(request, 'resources/edl_summary.html', context)
 
@@ -187,20 +230,21 @@ def edl_security_group_json(request, sg_id):
     return JsonResponse(data)
 
 
+@require_api_token
 @cache_page(300)  # Cache for 5 minutes
 def edl_enis_by_tags(request):
     """
     EDL endpoint for ENI IP addresses filtered by tags
-    Example: /edl/enis/?Environment=PROD&Application=WebServer
+    Example: /edl/enis/?token=YOUR_TOKEN&Environment=PROD&Application=WebServer
     """
     try:
         # Start with all ENIs
         enis = ENI.objects.all()
 
-        # Get tag filters from query parameters
+        # Get tag filters from query parameters (exclude 'token' parameter)
         tag_filters = {}
         for key, value in request.GET.items():
-            if key:  # Ensure key is not empty
+            if key and key != 'token':  # Exclude token parameter from tag filters
                 tag_filters[key] = value
 
         # Filter ENIs by tags
@@ -237,10 +281,10 @@ def edl_enis_by_tags_json(request):
         # Start with all ENIs
         enis = ENI.objects.all()
 
-        # Get tag filters from query parameters
+        # Get tag filters from query parameters (exclude 'token' parameter)
         tag_filters = {}
         for key, value in request.GET.items():
-            if key:  # Ensure key is not empty
+            if key and key != 'token':  # Exclude token parameter from tag filters
                 tag_filters[key] = value
 
         # Filter ENIs by tags
