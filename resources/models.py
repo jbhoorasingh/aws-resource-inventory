@@ -1,5 +1,66 @@
 from django.db import models
+from django.contrib.auth.models import User
 from django.core.validators import validate_ipv46_address
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
+import secrets
+
+
+class UserProfile(models.Model):
+    """Extended user profile with API token for authentication"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    api_token = models.CharField(max_length=64, unique=True, blank=True, help_text="API token for EDL endpoint authentication")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Profile"
+        verbose_name_plural = "User Profiles"
+        permissions = [
+            ("can_poll_accounts", "Can poll AWS accounts for resource discovery"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s profile"
+
+    def save(self, *args, **kwargs):
+        """Generate API token if not set"""
+        if not self.api_token:
+            self.api_token = self.generate_token()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_token():
+        """Generate a secure random API token"""
+        return secrets.token_urlsafe(48)
+
+    def regenerate_token(self):
+        """Regenerate the API token"""
+        self.api_token = self.generate_token()
+        self.save()
+        return self.api_token
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Automatically create UserProfile when User is created"""
+    if created:
+        UserProfile.objects.create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """Save UserProfile when User is saved"""
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+
+
+@receiver(post_save, sender=User)
+def create_auth_token(sender, instance, created, **kwargs):
+    """Automatically create DRF auth token when User is created"""
+    if created:
+        Token.objects.create(user=instance)
 
 
 class AWSAccount(models.Model):
