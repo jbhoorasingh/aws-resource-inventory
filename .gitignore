@@ -10,6 +10,7 @@ __pycache__
 
 db.sqlite3
 .env
+.env.production
 .DS_Store
 .idea
 .vscode
@@ -30,3 +31,9 @@ poetry.lock
 dist/
 *.egg-info/
 logs/*.log
+
+# Docker
+.docker/
+docker-compose.override.yml
+ssl/
+staticfiles/

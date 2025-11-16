@@ -2,6 +2,7 @@
 Tests for External Dynamic List (EDL) views.
 """
 from django.test import TestCase, Client
+from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils import timezone
 from resources.models import (
@@ -14,6 +15,10 @@ class EDLAccountIPsTest(TestCase):
 
     def setUp(self):
         self.client = Client()
+
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
 
         # Create test data
         self.account = AWSAccount.objects.create(
@@ -66,7 +71,7 @@ class EDLAccountIPsTest(TestCase):
     def test_edl_account_ips_format(self):
         """Test EDL account IPs returns correct format."""
         url = reverse('edl_account_ips', args=['123456789012'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain; charset=utf-8')
@@ -89,7 +94,7 @@ class EDLAccountIPsTest(TestCase):
     def test_edl_account_ips_different_account(self):
         """Test EDL for different account returns empty list."""
         url = reverse('edl_account_ips', args=['999999999999'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
@@ -100,7 +105,7 @@ class EDLAccountIPsTest(TestCase):
         url = reverse('edl_account_ips', args=['123456789012'])
 
         # First request
-        response1 = self.client.get(url)
+        response1 = self.client.get(url + f'?token={self.token}')
         self.assertEqual(response1.status_code, 200)
 
         # Create a new ENI
@@ -116,7 +121,7 @@ class EDLAccountIPsTest(TestCase):
 
         # Second request - should be cached (won't include new ENI)
         # Note: In testing, cache might not persist, so we just verify response is valid
-        response2 = self.client.get(url)
+        response2 = self.client.get(url + f'?token={self.token}')
         self.assertEqual(response2.status_code, 200)
 
 
@@ -125,6 +130,10 @@ class EDLSecurityGroupIPsTest(TestCase):
 
     def setUp(self):
         self.client = Client()
+
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -179,7 +188,7 @@ class EDLSecurityGroupIPsTest(TestCase):
     def test_edl_security_group_ips_format(self):
         """Test EDL security group IPs returns correct format."""
         url = reverse('edl_security_group_ips', args=['sg-12345678'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain; charset=utf-8')
@@ -199,7 +208,7 @@ class EDLSecurityGroupIPsTest(TestCase):
     def test_edl_security_group_not_found(self):
         """Test EDL for non-existent security group returns 404."""
         url = reverse('edl_security_group_ips', args=['sg-99999999'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
         self.assertEqual(response.status_code, 404)
 
     def test_edl_security_group_no_enis(self):
@@ -212,7 +221,7 @@ class EDLSecurityGroupIPsTest(TestCase):
         )
 
         url = reverse('edl_security_group_ips', args=['sg-87654321'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
@@ -225,6 +234,10 @@ class EDLSummaryViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('edl_summary')
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.account = AWSAccount.objects.create(
@@ -305,6 +318,10 @@ class EDLAccountJSONTest(TestCase):
     def setUp(self):
         self.client = Client()
 
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
+
         # Create test data
         self.account = AWSAccount.objects.create(
             account_id='123456789012',
@@ -351,7 +368,7 @@ class EDLAccountJSONTest(TestCase):
     def test_edl_account_json_structure(self):
         """Test EDL account JSON returns correct structure."""
         url = reverse('edl_account_json', args=['123456789012'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
@@ -371,7 +388,7 @@ class EDLAccountJSONTest(TestCase):
     def test_edl_account_json_values(self):
         """Test EDL account JSON returns correct values."""
         url = reverse('edl_account_json', args=['123456789012'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         data = response.json()
 
@@ -387,7 +404,7 @@ class EDLAccountJSONTest(TestCase):
     def test_edl_account_json_not_found(self):
         """Test EDL account JSON for non-existent account returns 404."""
         url = reverse('edl_account_json', args=['999999999999'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
         self.assertEqual(response.status_code, 404)
 
 
@@ -396,6 +413,10 @@ class EDLSecurityGroupJSONTest(TestCase):
 
     def setUp(self):
         self.client = Client()
+
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -433,7 +454,7 @@ class EDLSecurityGroupJSONTest(TestCase):
     def test_edl_security_group_json_structure(self):
         """Test EDL security group JSON returns correct structure."""
         url = reverse('edl_security_group_json', args=['sg-12345678'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
@@ -454,7 +475,7 @@ class EDLSecurityGroupJSONTest(TestCase):
     def test_edl_security_group_json_values(self):
         """Test EDL security group JSON returns correct values."""
         url = reverse('edl_security_group_json', args=['sg-12345678'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
 
         data = response.json()
 
@@ -471,7 +492,7 @@ class EDLSecurityGroupJSONTest(TestCase):
     def test_edl_security_group_json_not_found(self):
         """Test EDL security group JSON for non-existent SG returns 404."""
         url = reverse('edl_security_group_json', args=['sg-99999999'])
-        response = self.client.get(url)
+        response = self.client.get(url + f'?token={self.token}')
         self.assertEqual(response.status_code, 404)
 
 
@@ -481,6 +502,10 @@ class EDLENIsByTagsTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('edl_enis_by_tags')
+
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -531,7 +556,7 @@ class EDLENIsByTagsTest(TestCase):
 
     def test_edl_enis_by_tags_single_filter(self):
         """Test filtering ENIs by single tag."""
-        response = self.client.get(self.url, {'Environment': 'PROD'})
+        response = self.client.get(self.url, {'Environment': 'PROD', 'token': self.token})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain; charset=utf-8')
@@ -549,7 +574,8 @@ class EDLENIsByTagsTest(TestCase):
         """Test filtering ENIs by multiple tags."""
         response = self.client.get(self.url, {
             'Environment': 'PROD',
-            'Application': 'WebServer'
+            'Application': 'WebServer',
+            'token': self.token
         })
 
         self.assertEqual(response.status_code, 200)
@@ -564,7 +590,7 @@ class EDLENIsByTagsTest(TestCase):
 
     def test_edl_enis_by_tags_no_matches(self):
         """Test filtering with no matching tags returns empty."""
-        response = self.client.get(self.url, {'Environment': 'STAGING'})
+        response = self.client.get(self.url, {'Environment': 'STAGING', 'token': self.token})
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
@@ -572,7 +598,7 @@ class EDLENIsByTagsTest(TestCase):
 
     def test_edl_enis_by_tags_no_filters(self):
         """Test no filters returns all ENIs."""
-        response = self.client.get(self.url)
+        response = self.client.get(self.url, {'token': self.token})
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
@@ -588,6 +614,10 @@ class EDLENIsByTagsJSONTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('edl_enis_by_tags_json')
+
+        # Create user and get API token
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.token = self.user.profile.api_token
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -618,7 +648,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_structure(self):
         """Test JSON metadata structure."""
-        response = self.client.get(self.url, {'Environment': 'PROD'})
+        response = self.client.get(self.url, {'Environment': 'PROD', 'token': self.token})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
@@ -635,7 +665,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_values(self):
         """Test JSON metadata values."""
-        response = self.client.get(self.url, {'Environment': 'PROD'})
+        response = self.client.get(self.url, {'Environment': 'PROD', 'token': self.token})
 
         data = response.json()
 
@@ -648,7 +678,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_no_filters(self):
         """Test JSON metadata with no filters."""
-        response = self.client.get(self.url)
+        response = self.client.get(self.url, {'token': self.token})
 
         data = response.json()
 
