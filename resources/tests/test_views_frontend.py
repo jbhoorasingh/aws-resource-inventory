@@ -2,12 +2,14 @@
 Tests for frontend views.
 """
 from django.test import TestCase, Client
+from django.contrib.auth.models import User, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch, MagicMock
 from resources.models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule,
-    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance
+    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance, UserProfile
 )
 
 
@@ -17,6 +19,11 @@ class AccountsViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('accounts')
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
+
         self.account1 = AWSAccount.objects.create(
             account_id='123456789012',
             account_name='Test Account 1',
@@ -56,6 +63,16 @@ class PollAccountViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('poll_account')
+
+        # Create user with can_poll_accounts permission
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        content_type = ContentType.objects.get_for_model(UserProfile)
+        permission = Permission.objects.get(
+            codename='can_poll_accounts',
+            content_type=content_type
+        )
+        self.user.user_permissions.add(permission)
+        self.client.login(username='testuser', password='testpass123')
 
     @patch('resources.views_frontend.subprocess.run')
     def test_poll_account_with_direct_credentials(self, mock_subprocess):
@@ -105,6 +122,10 @@ class ENIsViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('enis')
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -163,6 +184,10 @@ class EC2InstancesViewTest(TestCase):
         self.client = Client()
         self.url = reverse('ec2_instances')
 
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
+
         # Create test data
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
@@ -219,6 +244,10 @@ class EC2InstanceDetailViewTest(TestCase):
 
     def setUp(self):
         self.client = Client()
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -279,6 +308,10 @@ class SecurityGroupsViewTest(TestCase):
         self.client = Client()
         self.url = reverse('security_groups')
 
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
+
         # Create test data
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
@@ -329,6 +362,10 @@ class SecurityGroupDetailViewTest(TestCase):
 
     def setUp(self):
         self.client = Client()
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -383,6 +420,10 @@ class EDLSummaryViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('edl_summary')
+
+        # Create and login user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.account = AWSAccount.objects.create(

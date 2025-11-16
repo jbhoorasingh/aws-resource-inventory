@@ -2,6 +2,7 @@
 Tests for REST API views.
 """
 from django.test import TestCase
+from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -18,6 +19,11 @@ class AWSAccountAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('awsaccount-list')
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.account1 = AWSAccount.objects.create(
             account_id='123456789012',
             account_name='Test Account 1',
@@ -58,6 +64,11 @@ class VPCAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('vpc-list')
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.vpc1 = VPC.objects.create(
             vpc_id='vpc-12345678',
             cidr_block='10.0.0.0/16',
@@ -108,6 +119,11 @@ class SubnetAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('subnet-list')
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
             cidr_block='10.0.0.0/16',
@@ -157,6 +173,11 @@ class SecurityGroupAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('securitygroup-list')
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
             cidr_block='10.0.0.0/16',
@@ -219,6 +240,11 @@ class ENIAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('eni-list')
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
             cidr_block='10.0.0.0/16',
@@ -341,6 +367,11 @@ class APIPaginationTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+
+        # Create and authenticate user
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.force_authenticate(user=self.user)
+
         self.vpc = VPC.objects.create(
             vpc_id='vpc-12345678',
             cidr_block='10.0.0.0/16',
