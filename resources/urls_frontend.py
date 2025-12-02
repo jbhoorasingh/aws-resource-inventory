@@ -14,6 +14,7 @@ urlpatterns = [
     # Frontend views
     path('', views_frontend.accounts_view, name='accounts'),
     path('accounts/', views_frontend.accounts_view, name='accounts'),
+    path('vpcs/', views_frontend.vpcs_view, name='vpcs'),
     path('enis/', views_frontend.enis_view, name='enis'),
     path('enis/<int:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
     path('ec2-instances/', views_frontend.ec2_instances_view, name='ec2_instances'),
