@@ -51,6 +51,9 @@
                         <a href="{% url 'accounts' %}" class="{% if request.resolver_match.url_name == 'accounts' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
                             <i class="fas fa-users mr-2"></i> Accounts
                         </a>
+                        <a href="{% url 'vpcs' %}" class="{% if request.resolver_match.url_name == 'vpcs' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-cloud mr-2"></i> VPCs
+                        </a>
                         <a href="{% url 'enis' %}" class="{% if request.resolver_match.url_name == 'enis' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
                             <i class="fas fa-network-wired mr-2"></i> ENIs
                         </a>

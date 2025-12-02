@@ -45,6 +45,76 @@ def accounts_view(request):
 
 
 @login_required
+def vpcs_view(request):
+    """Display VPCs page with hierarchical tree view of subnets and resources"""
+    # Get filter parameters
+    region_filter = request.GET.get('region', '')
+    account_filter = request.GET.get('account', '')
+    state_filter = request.GET.get('state', '')
+
+    # Base queryset with prefetching
+    vpcs = VPC.objects.prefetch_related(
+        'subnets',
+        'subnets__enis__secondary_ips',
+        'subnets__enis__eni_security_groups__security_group',
+        'subnets__enis__ec2_instance',
+        'subnets__instances',
+        'security_groups'
+    ).all()
+
+    # Apply filters
+    if region_filter:
+        vpcs = vpcs.filter(region=region_filter)
+    if account_filter:
+        vpcs = vpcs.filter(owner_account=account_filter)
+    if state_filter:
+        vpcs = vpcs.filter(state=state_filter)
+
+    vpcs = vpcs.order_by('region', 'vpc_id')
+
+    # Get summary statistics
+    total_vpcs = VPC.objects.count()
+    total_subnets = Subnet.objects.count()
+    total_enis = ENI.objects.count()
+    total_ec2 = EC2Instance.objects.count()
+    total_sgs = SecurityGroup.objects.count()
+
+    # Get unique values for filters
+    regions = VPC.objects.values_list('region', flat=True).distinct().order_by('region')
+    accounts = VPC.objects.values_list('owner_account', flat=True).distinct().order_by('owner_account')
+    states = VPC.objects.values_list('state', flat=True).distinct().order_by('state')
+
+    # Add resource counts to each VPC and subnet
+    for vpc in vpcs:
+        vpc.subnet_list = vpc.subnets.all()
+        for subnet in vpc.subnet_list:
+            subnet.eni_list = subnet.enis.all()
+            subnet.ec2_list = subnet.instances.all()
+            # Get unique security groups for this subnet
+            sg_ids = set()
+            for eni in subnet.eni_list:
+                for eni_sg in eni.eni_security_groups.all():
+                    sg_ids.add(eni_sg.security_group)
+            subnet.sg_list = list(sg_ids)
+
+    context = {
+        'vpcs': vpcs,
+        'total_vpcs': total_vpcs,
+        'total_subnets': total_subnets,
+        'total_enis': total_enis,
+        'total_ec2': total_ec2,
+        'total_sgs': total_sgs,
+        'regions': regions,
+        'accounts': accounts,
+        'states': states,
+        'selected_region': region_filter,
+        'selected_account': account_filter,
+        'selected_state': state_filter,
+    }
+    return render(request, 'resources/vpcs.html', context)
+
+
+@login_required
 def enis_view(request):
     """Display ENIs page with detailed information"""
     enis = ENI.objects.select_related(
