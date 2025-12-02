@@ -117,35 +117,90 @@ def vpcs_view(request):
 @login_required
 def enis_view(request):
     """Display ENIs page with detailed information"""
+    # Get filter parameters
+    region_filter = request.GET.get('region', '')
+    account_filter = request.GET.get('account', '')
+    status_filter = request.GET.get('status', '')
+    vpc_filter = request.GET.get('vpc', '')
+    subnet_filter = request.GET.get('subnet', '')
+    interface_type_filter = request.GET.get('interface_type', '')
+    has_public_ip_filter = request.GET.get('has_public_ip', '')
+    attached_filter = request.GET.get('attached', '')
+
+    # Base queryset
     enis = ENI.objects.select_related(
         'subnet__vpc', 'ec2_instance'
     ).prefetch_related(
         'secondary_ips', 'eni_security_groups__security_group'
-    ).all().order_by('-created_at')
-    
-    # Get summary statistics
+    ).all()
+
+    # Apply filters
+    if region_filter:
+        enis = enis.filter(subnet__vpc__region=region_filter)
+    if account_filter:
+        enis = enis.filter(owner_account=account_filter)
+    if status_filter:
+        enis = enis.filter(status=status_filter)
+    if vpc_filter:
+        enis = enis.filter(subnet__vpc__vpc_id=vpc_filter)
+    if subnet_filter:
+        enis = enis.filter(subnet__subnet_id=subnet_filter)
+    if interface_type_filter:
+        enis = enis.filter(interface_type=interface_type_filter)
+    if has_public_ip_filter == 'yes':
+        enis = enis.exclude(public_ip_address__isnull=True).exclude(public_ip_address='')
+    elif has_public_ip_filter == 'no':
+        enis = enis.filter(Q(public_ip_address__isnull=True) | Q(public_ip_address=''))
+    if attached_filter == 'yes':
+        enis = enis.exclude(attached_resource_id='')
+    elif attached_filter == 'no':
+        enis = enis.filter(attached_resource_id='')
+
+    enis = enis.order_by('-created_at')
+
+    # Get summary statistics (use base ENI queryset without filters)
     total_enis = ENI.objects.count()
-    
+
     # Count private IPs (primary + secondary)
-    # Primary private IPs from ENI records - use a simpler approach
     primary_private_ips = ENI.objects.filter(private_ip_address__isnull=False).count()
-    # Secondary IPs from ENISecondaryIP records
     secondary_ips_count = ENISecondaryIP.objects.count()
     total_private_ips = primary_private_ips + secondary_ips_count
-    
+
     # Count public IPs
     total_public_ips = ENI.objects.exclude(public_ip_address__isnull=True).exclude(public_ip_address='').count()
-    
+
     # Count unique regions
     total_regions = VPC.objects.values('region').distinct().count()
-    
-    
+
+    # Get unique values for filter dropdowns
+    regions = VPC.objects.values_list('region', flat=True).distinct().order_by('region')
+    accounts = ENI.objects.values_list('owner_account', flat=True).distinct().order_by('owner_account')
+    statuses = ENI.objects.values_list('status', flat=True).distinct().order_by('status')
+    vpcs = VPC.objects.values_list('vpc_id', flat=True).distinct().order_by('vpc_id')
+    subnets = Subnet.objects.select_related('vpc').values('subnet_id', 'vpc__vpc_id').distinct().order_by('subnet_id')
+    interface_types = ENI.objects.values_list('interface_type', flat=True).distinct().order_by('interface_type')
+
     context = {
         'enis': enis,
         'total_enis': total_enis,
         'total_private_ips': total_private_ips,
         'total_public_ips': total_public_ips,
         'total_regions': total_regions,
+        'filtered_count': enis.count(),
+        'regions': regions,
+        'accounts': accounts,
+        'statuses': statuses,
+        'vpcs': vpcs,
+        'subnets': subnets,
+        'interface_types': interface_types,
+        'selected_region': region_filter,
+        'selected_account': account_filter,
+        'selected_status': status_filter,
+        'selected_vpc': vpc_filter,
+        'selected_subnet': subnet_filter,
+        'selected_interface_type': interface_type_filter,
+        'selected_has_public_ip': has_public_ip_filter,
+        'selected_attached': attached_filter,
     }
     return render(request, 'resources/enis.html', context)
 
@@ -465,25 +520,65 @@ def api_accounts_json(request):
 @login_required
 def security_groups_view(request):
     """Display security groups page with rules information"""
-    security_groups = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all().order_by('name')
-    
+    # Get filter parameters
+    region_filter = request.GET.get('region', '')
+    account_filter = request.GET.get('account', '')
+    vpc_filter = request.GET.get('vpc', '')
+    has_ingress_filter = request.GET.get('has_ingress', '')
+    has_egress_filter = request.GET.get('has_egress', '')
+
+    # Base queryset
+    security_groups = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all()
+
+    # Apply filters
+    if region_filter:
+        security_groups = security_groups.filter(vpc__region=region_filter)
+    if account_filter:
+        security_groups = security_groups.filter(vpc__owner_account=account_filter)
+    if vpc_filter:
+        security_groups = security_groups.filter(vpc__vpc_id=vpc_filter)
+    if has_ingress_filter == 'yes':
+        security_groups = security_groups.filter(rules__rule_type='ingress').distinct()
+    elif has_ingress_filter == 'no':
+        security_groups = security_groups.exclude(rules__rule_type='ingress').distinct()
+    if has_egress_filter == 'yes':
+        security_groups = security_groups.filter(rules__rule_type='egress').distinct()
+    elif has_egress_filter == 'no':
+        security_groups = security_groups.exclude(rules__rule_type='egress').distinct()
+
+    security_groups = security_groups.order_by('name')
+
     # Add rule counts for each security group
     for sg in security_groups:
         sg.ingress_count = sg.rules.filter(rule_type='ingress').count()
         sg.egress_count = sg.rules.filter(rule_type='egress').count()
-    
-    # Get summary statistics
+
+    # Get summary statistics (use base queryset without filters)
     total_security_groups = SecurityGroup.objects.count()
     total_ingress_rules = SecurityGroupRule.objects.filter(rule_type='ingress').count()
     total_egress_rules = SecurityGroupRule.objects.filter(rule_type='egress').count()
     total_regions = VPC.objects.values('region').distinct().count()
-    
+
+    # Get unique values for filter dropdowns
+    regions = VPC.objects.values_list('region', flat=True).distinct().order_by('region')
+    accounts = VPC.objects.values_list('owner_account', flat=True).distinct().order_by('owner_account')
+    vpcs = VPC.objects.values_list('vpc_id', flat=True).distinct().order_by('vpc_id')
+
     context = {
         'security_groups': security_groups,
         'total_security_groups': total_security_groups,
         'total_ingress_rules': total_ingress_rules,
         'total_egress_rules': total_egress_rules,
         'total_regions': total_regions,
+        'filtered_count': security_groups.count(),
+        'regions': regions,
+        'accounts': accounts,
+        'vpcs': vpcs,
+        'selected_region': region_filter,
+        'selected_account': account_filter,
+        'selected_vpc': vpc_filter,
+        'selected_has_ingress': has_ingress_filter,
+        'selected_has_egress': has_egress_filter,
     }
     return render(request, 'resources/security_groups.html', context)
 
@@ -517,17 +612,59 @@ def security_group_detail_view(request, sg_id):
 @login_required
 def ec2_instances_view(request):
     """Display EC2 instances page with detailed information"""
+    # Get filter parameters
+    region_filter = request.GET.get('region', '')
+    account_filter = request.GET.get('account', '')
+    state_filter = request.GET.get('state', '')
+    instance_type_filter = request.GET.get('instance_type', '')
+    vpc_filter = request.GET.get('vpc', '')
+    subnet_filter = request.GET.get('subnet', '')
+    has_public_ip_filter = request.GET.get('has_public_ip', '')
+    platform_filter = request.GET.get('platform', '')
+
+    # Base queryset
     instances = EC2Instance.objects.select_related(
         'vpc', 'subnet'
     ).prefetch_related(
         'enis__secondary_ips', 'enis__eni_security_groups__security_group'
-    ).all().order_by('-launch_time')
+    ).all()
 
-    # Get summary statistics
+    # Apply filters
+    if region_filter:
+        instances = instances.filter(region=region_filter)
+    if account_filter:
+        instances = instances.filter(owner_account=account_filter)
+    if state_filter:
+        instances = instances.filter(state=state_filter)
+    if instance_type_filter:
+        instances = instances.filter(instance_type=instance_type_filter)
+    if vpc_filter:
+        instances = instances.filter(vpc__vpc_id=vpc_filter)
+    if subnet_filter:
+        instances = instances.filter(subnet__subnet_id=subnet_filter)
+    if has_public_ip_filter == 'yes':
+        instances = instances.exclude(public_ip_address__isnull=True).exclude(public_ip_address='')
+    elif has_public_ip_filter == 'no':
+        instances = instances.filter(Q(public_ip_address__isnull=True) | Q(public_ip_address=''))
+    if platform_filter:
+        instances = instances.filter(platform=platform_filter)
+
+    instances = instances.order_by('-launch_time')
+
+    # Get summary statistics (use base queryset without filters)
     total_instances = EC2Instance.objects.count()
     running_instances = EC2Instance.objects.filter(state='running').count()
     stopped_instances = EC2Instance.objects.filter(state='stopped').count()
     total_regions = EC2Instance.objects.values('region').distinct().count()
+
+    # Get unique values for filter dropdowns
+    regions = EC2Instance.objects.values_list('region', flat=True).distinct().order_by('region')
+    accounts = EC2Instance.objects.values_list('owner_account', flat=True).distinct().order_by('owner_account')
+    states = EC2Instance.objects.values_list('state', flat=True).distinct().order_by('state')
+    instance_types = EC2Instance.objects.values_list('instance_type', flat=True).distinct().order_by('instance_type')
+    vpcs = VPC.objects.values_list('vpc_id', flat=True).distinct().order_by('vpc_id')
+    subnets = Subnet.objects.select_related('vpc').values('subnet_id', 'vpc__vpc_id').distinct().order_by('subnet_id')
+    platforms = EC2Instance.objects.exclude(platform='').values_list('platform', flat=True).distinct().order_by('platform')
 
     context = {
         'instances': instances,
@@ -535,6 +672,22 @@ def ec2_instances_view(request):
         'running_instances': running_instances,
         'stopped_instances': stopped_instances,
         'total_regions': total_regions,
+        'filtered_count': instances.count(),
+        'regions': regions,
+        'accounts': accounts,
+        'states': states,
+        'instance_types': instance_types,
+        'vpcs': vpcs,
+        'subnets': subnets,
+        'platforms': platforms,
+        'selected_region': region_filter,
+        'selected_account': account_filter,
+        'selected_state': state_filter,
+        'selected_instance_type': instance_type_filter,
+        'selected_vpc': vpc_filter,
+        'selected_subnet': subnet_filter,
+        'selected_has_public_ip': has_public_ip_filter,
+        'selected_platform': platform_filter,
     }
     return render(request, 'resources/ec2_instances.html', context)
 
