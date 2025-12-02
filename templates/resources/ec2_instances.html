@@ -51,39 +51,92 @@
 <div class="bg-white shadow-lg rounded-lg mb-6">
     <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
         <h5 class="text-lg font-semibold text-gray-900">
-            <i class="fas fa-filter mr-2 text-aws-orange"></i>Filter by Tags
+            <i class="fas fa-filter mr-2 text-aws-orange"></i>Filters
+            {% if filtered_count != total_instances %}
+            <span class="ml-2 px-2 py-1 bg-aws-orange text-white text-xs rounded-full">{{ filtered_count }} of {{ total_instances }}</span>
+            {% endif %}
         </h5>
     </div>
     <div class="p-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Tag Key</label>
-                <input type="text"
-                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange"
-                       id="tagKeyFilter"
-                       placeholder="e.g., Environment">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Tag Value</label>
-                <input type="text"
-                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange"
-                       id="tagValueFilter"
-                       placeholder="e.g., PROD">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label>
-                <div class="flex gap-2">
-                    <button id="applyTagFilter"
-                            class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
-                        <i class="fas fa-search"></i> Apply Filter
-                    </button>
-                    <button id="clearTagFilter"
-                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
-                        <i class="fas fa-times"></i> Clear
-                    </button>
+        <form method="get" action="{% url 'ec2_instances' %}">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                    <select name="region" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All Regions</option>
+                        {% for region in regions %}
+                            <option value="{{ region }}" {% if selected_region == region %}selected{% endif %}>{{ region }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Account</label>
+                    <select name="account" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All Accounts</option>
+                        {% for account in accounts %}
+                            <option value="{{ account }}" {% if selected_account == account %}selected{% endif %}>{{ account }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <select name="state" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All States</option>
+                        {% for state in states %}
+                            <option value="{{ state }}" {% if selected_state == state %}selected{% endif %}>{{ state }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Instance Type</label>
+                    <select name="instance_type" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All Types</option>
+                        {% for itype in instance_types %}
+                            <option value="{{ itype }}" {% if selected_instance_type == itype %}selected{% endif %}>{{ itype }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
-        </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">VPC</label>
+                    <select name="vpc" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All VPCs</option>
+                        {% for vpc in vpcs %}
+                            <option value="{{ vpc }}" {% if selected_vpc == vpc %}selected{% endif %}>{{ vpc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Has Public IP</label>
+                    <select name="has_public_ip" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">Any</option>
+                        <option value="yes" {% if selected_has_public_ip == 'yes' %}selected{% endif %}>Yes</option>
+                        <option value="no" {% if selected_has_public_ip == 'no' %}selected{% endif %}>No</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                    <select name="platform" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-aws-orange focus:border-aws-orange text-sm">
+                        <option value="">All Platforms</option>
+                        {% for plat in platforms %}
+                            <option value="{{ plat }}" {% if selected_platform == plat %}selected{% endif %}>{{ plat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label>
+                    <div class="flex gap-2">
+                        <button type="submit" class="bg-aws-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm">
+                            <i class="fas fa-search"></i> Apply
+                        </button>
+                        <a href="{% url 'ec2_instances' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
