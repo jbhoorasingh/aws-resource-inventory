@@ -27,7 +27,7 @@ venv/
 env/
 
 # Poetry
-poetry.lock
+# poetry.lock should be committed for reproducible builds
 dist/
 *.egg-info/
 logs/*.log

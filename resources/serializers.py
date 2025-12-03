@@ -139,3 +139,125 @@ class ResourceSummarySerializer(serializers.Serializer):
     total_public_ips = serializers.IntegerField()
     regions = serializers.ListField(child=serializers.CharField())
     accounts = serializers.ListField(child=serializers.CharField())
+
+
+# Hierarchical VPC/Subnet serializers for tree view
+class SubnetENISerializer(serializers.ModelSerializer):
+    """Compact ENI serializer for subnet tree view"""
+    ec2_instance_id = serializers.CharField(source='ec2_instance.instance_id', read_only=True, allow_null=True)
+    ec2_instance_name = serializers.CharField(source='ec2_instance.name', read_only=True, allow_null=True)
+    ec2_instance_state = serializers.CharField(source='ec2_instance.state', read_only=True, allow_null=True)
+    security_group_ids = serializers.SerializerMethodField()
+    secondary_ip_addresses = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ENI
+        fields = [
+            'id', 'eni_id', 'name', 'private_ip_address', 'public_ip_address',
+            'status', 'interface_type', 'attached_resource_id', 'attached_resource_type',
+            'ec2_instance_id', 'ec2_instance_name', 'ec2_instance_state',
+            'security_group_ids', 'secondary_ip_addresses', 'tags'
+        ]
+
+    def get_security_group_ids(self, obj):
+        return [sg.security_group.sg_id for sg in obj.eni_security_groups.all()]
+
+    def get_secondary_ip_addresses(self, obj):
+        return [ip.ip_address for ip in obj.secondary_ips.all()]
+
+
+class SubnetSecurityGroupSerializer(serializers.ModelSerializer):
+    """Compact security group serializer for subnet tree view"""
+    rule_count = serializers.SerializerMethodField()
+    ingress_rule_count = serializers.SerializerMethodField()
+    egress_rule_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SecurityGroup
+        fields = ['id', 'sg_id', 'name', 'description', 'tags', 'rule_count', 'ingress_rule_count', 'egress_rule_count']
+
+    def get_rule_count(self, obj):
+        return obj.rules.count()
+
+    def get_ingress_rule_count(self, obj):
+        return obj.rules.filter(rule_type='ingress').count()
+
+    def get_egress_rule_count(self, obj):
+        return obj.rules.filter(rule_type='egress').count()
+
+
+class SubnetEC2InstanceSerializer(serializers.ModelSerializer):
+    """Compact EC2 instance serializer for subnet tree view"""
+    eni_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EC2Instance
+        fields = [
+            'id', 'instance_id', 'name', 'instance_type', 'state',
+            'private_ip_address', 'public_ip_address', 'platform',
+            'launch_time', 'tags', 'eni_count'
+        ]
+
+    def get_eni_count(self, obj):
+        return obj.enis.count()
+
+
+class SubnetTreeSerializer(serializers.ModelSerializer):
+    """Subnet serializer with nested ENIs, EC2 instances, and security groups"""
+    vpc_id = serializers.CharField(source='vpc.vpc_id', read_only=True)
+    region = serializers.CharField(source='vpc.region', read_only=True)
+    enis = SubnetENISerializer(many=True, read_only=True)
+    ec2_instances = SubnetEC2InstanceSerializer(source='instances', many=True, read_only=True)
+    security_groups = serializers.SerializerMethodField()
+    resource_counts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subnet
+        fields = [
+            'id', 'subnet_id', 'vpc_id', 'region', 'name', 'cidr_block',
+            'availability_zone', 'owner_account', 'state', 'tags',
+            'enis', 'ec2_instances', 'security_groups', 'resource_counts'
+        ]
+
+    def get_security_groups(self, obj):
+        # Get all unique security groups used by ENIs in this subnet
+        sg_ids = set()
+        for eni in obj.enis.all():
+            for eni_sg in eni.eni_security_groups.all():
+                sg_ids.add(eni_sg.security_group.id)
+
+        security_groups = SecurityGroup.objects.filter(id__in=sg_ids).prefetch_related('rules')
+        return SubnetSecurityGroupSerializer(security_groups, many=True).data
+
+    def get_resource_counts(self, obj):
+        return {
+            'eni_count': obj.enis.count(),
+            'ec2_instance_count': obj.instances.count(),
+            'security_group_count': len(self.get_security_groups(obj))
+        }
+
+
+class VPCTreeSerializer(serializers.ModelSerializer):
+    """VPC serializer with nested subnets and all their resources"""
+    subnets = SubnetTreeSerializer(many=True, read_only=True)
+    resource_counts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VPC
+        fields = [
+            'id', 'vpc_id', 'region', 'cidr_block', 'owner_account',
+            'is_default', 'state', 'tags', 'subnets', 'resource_counts'
+        ]
+
+    def get_resource_counts(self, obj):
+        subnet_count = obj.subnets.count()
+        eni_count = ENI.objects.filter(subnet__vpc=obj).count()
+        ec2_count = EC2Instance.objects.filter(vpc=obj).count()
+        sg_count = obj.security_groups.count()
+
+        return {
+            'subnet_count': subnet_count,
+            'eni_count': eni_count,
+            'ec2_instance_count': ec2_count,
+            'security_group_count': sg_count
+        }
