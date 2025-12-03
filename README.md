@@ -253,12 +253,31 @@ poetry run python manage.py shell
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-[Add contribution guidelines here]
+Contributions are welcome! If you'd like to contribute to this project, please follow these steps:
+
+1. **Fork the repository** and create a new branch for your feature or bugfix
+2. **Make your changes** and ensure they follow the existing code style
+3. **Add tests** for any new functionality or bug fixes
+4. **Run the test suite** to ensure everything passes:
+   ```bash
+   poetry run pytest
+   ```
+5. **Submit a pull request** with a clear description of your changes
+
+### Reporting Issues
+
+If you encounter any bugs or have suggestions for improvements, please open an issue on the [GitHub issue tracker](https://github.com/jbhoorasingh/aws-resource-inventory/issues).
+
+When reporting issues, please include:
+- A clear description of the problem
+- Steps to reproduce the issue
+- Expected vs. actual behavior
+- Any relevant error messages or logs
 
 ## Support
 
-[Add support contact or issue tracker info here]
+- **Issue Tracker**: https://github.com/jbhoorasingh/aws-resource-inventory/issues
