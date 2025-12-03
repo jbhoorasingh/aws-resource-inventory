@@ -11,9 +11,9 @@ from .models import (
     ENISecondaryIP, ENISecurityGroup
 )
 from .serializers import (
-    AWSAccountSerializer, VPCSerializer, SubnetSerializer, 
+    AWSAccountSerializer, VPCSerializer, SubnetSerializer,
     SecurityGroupSerializer, ENISerializer, ENIDetailSerializer,
-    ResourceSummarySerializer
+    ResourceSummarySerializer, VPCTreeSerializer, SubnetTreeSerializer
 )
 
 
@@ -36,6 +36,38 @@ class VPCViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['vpc_id', 'region', 'created_at']
     ordering = ['vpc_id']
 
+    @action(detail=False, methods=['get'])
+    def tree(self, request):
+        """Get VPCs with nested subnets and all resources in tree structure"""
+        # Get filtered VPCs
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # Prefetch all related resources for efficiency
+        queryset = queryset.prefetch_related(
+            'subnets',
+            'subnets__enis__secondary_ips',
+            'subnets__enis__eni_security_groups__security_group__rules',
+            'subnets__enis__ec2_instance',
+            'subnets__instances',
+            'security_groups__rules'
+        )
+
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = VPCTreeSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = VPCTreeSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def tree_detail(self, request, pk=None):
+        """Get single VPC with nested subnets and all resources"""
+        vpc = self.get_object()
+        serializer = VPCTreeSerializer(vpc)
+        return Response(serializer.data)
+
 
 class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subnet.objects.select_related('vpc').all()
@@ -45,6 +77,36 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['subnet_id', 'name', 'cidr_block', 'owner_account']
     ordering_fields = ['subnet_id', 'name', 'availability_zone', 'created_at']
     ordering = ['subnet_id']
+
+    @action(detail=False, methods=['get'])
+    def tree(self, request):
+        """Get subnets with nested ENIs, EC2 instances, and security groups"""
+        # Get filtered subnets
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # Prefetch all related resources for efficiency
+        queryset = queryset.prefetch_related(
+            'enis__secondary_ips',
+            'enis__eni_security_groups__security_group__rules',
+            'enis__ec2_instance',
+            'instances'
+        )
+
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = SubnetTreeSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SubnetTreeSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def tree_detail(self, request, pk=None):
+        """Get single subnet with nested resources"""
+        subnet = self.get_object()
+        serializer = SubnetTreeSerializer(subnet)
+        return Response(serializer.data)
 
 
 class SecurityGroupViewSet(viewsets.ReadOnlyModelViewSet):
