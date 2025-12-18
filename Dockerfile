@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     libpq-dev \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
@@ -62,9 +63,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/admin/login/ || exit 1
 
-# Entrypoint script
+# Entrypoint scripts
 COPY --chown=appuser:appuser docker-entrypoint.sh /app/
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && \
+    chmod +x /app/scripts/docker-entrypoint-dev.sh
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gunicorn", "aws_inventory.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]
