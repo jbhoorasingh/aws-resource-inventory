@@ -11,6 +11,7 @@ router.register(r'vpcs', views.VPCViewSet)
 router.register(r'subnets', views.SubnetViewSet)
 router.register(r'security-groups', views.SecurityGroupViewSet)
 router.register(r'enis', views.ENIViewSet)
+router.register(r'discovery-tasks', views.DiscoveryTaskViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

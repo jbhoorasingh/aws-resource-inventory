@@ -1,7 +1,7 @@
 """
 Frontend views for AWS Resource Inventory
 """
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, permission_required
@@ -9,11 +9,11 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Count, Q
+from django.db import transaction
 from django.utils import timezone
-import subprocess
 import json
 import logging
-from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance
+from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance, DiscoveryTask
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,9 @@ def enis_view(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def poll_account_view(request):
-    """Handle account polling requests"""
+    """Handle account polling requests - now async with Celery"""
+    from .tasks import discover_account_resources
+
     try:
         # Get form data
         account_number = request.POST.get('account_number')
@@ -240,50 +242,52 @@ def poll_account_view(request):
             messages.error(request, 'At least one region must be specified.')
             return redirect('accounts')
 
-        # Run the discovery command
-        cmd = [
-            'python', 'manage.py', 'discover_aws_resources',
-            account_number,
-            access_key_id,
-            secret_access_key,
-            session_token
-        ] + region_list
+        # Get or create account and queue task in atomic block
+        with transaction.atomic():
+            account, _ = AWSAccount.objects.get_or_create(
+                account_id=account_number,
+                defaults={
+                    'account_name': account_name,
+                    'role_arn': role_arn,
+                    'external_id': external_id,
+                }
+            )
 
-        if account_name:
-            cmd.extend(['--account-name', account_name])
+            # Create task record
+            task_record = DiscoveryTask.objects.create(
+                task_type='single',
+                status='pending',
+                account=account,
+                regions=region_list,
+                initiated_by=request.user,
+                total_accounts=1
+            )
 
-        if role_arn:
-            cmd.extend(['--role-arn', role_arn])
+            # Capture values for the lambda closure
+            task_id = task_record.id
 
-        if external_id:
-            cmd.extend(['--external-id', external_id])
-        
-        # Execute the command
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd='.'
+            # Queue the Celery task after database commit (prevents race condition)
+            transaction.on_commit(
+                lambda: discover_account_resources.delay(
+                    task_record_id=task_id,
+                    account_number=account_number,
+                    account_name=account_name,
+                    access_key_id=access_key_id,
+                    secret_access_key=secret_access_key,
+                    session_token=session_token,
+                    regions=region_list,
+                    role_arn=role_arn or None,
+                    external_id=external_id or None
+                )
+            )
+
+        messages.success(
+            request,
+            f'Discovery task queued for account {account_number}. '
+            f'View progress on the Task Status page.'
         )
-        
-        if result.returncode == 0:
-            auth_method = f'using role assumption ({role_arn})' if role_arn else 'with direct credentials'
-            logger.info(f"Successfully polled account {account_number} {auth_method}")
-            logger.info(f"Regions: {', '.join(region_list)}")
-            messages.success(
-                request,
-                f'Successfully polled account {account_number} {auth_method}. '
-                f'Discovered resources in regions: {", ".join(region_list)}'
-            )
-        else:
-            logger.error(f"Failed to poll account {account_number}")
-            logger.error(f"Error output: {result.stderr[:500]}")
-            messages.error(
-                request,
-                f'Failed to poll account {account_number}. '
-                f'Error: {result.stderr}'
-            )
-    
+        return redirect('task_status')
+
     except Exception as e:
         messages.error(request, f'An error occurred: {str(e)}')
 
@@ -295,7 +299,9 @@ def poll_account_view(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def bulk_poll_accounts_view(request):
-    """Handle bulk account polling requests with role assumption"""
+    """Handle bulk account polling requests - now async with Celery"""
+    from .tasks import bulk_discover_resources
+
     try:
         # Get shared credentials
         access_key_id = request.POST.get('access_key_id')
@@ -305,7 +311,7 @@ def bulk_poll_accounts_view(request):
         accounts_config = request.POST.get('accounts_config', '')
 
         logger.info("="*80)
-        logger.info("BULK POLL REQUEST RECEIVED")
+        logger.info("BULK POLL REQUEST RECEIVED (Async)")
         logger.info(f"Timestamp: {timezone.now().isoformat()}")
         logger.info(f"Regions: {regions}")
 
@@ -353,105 +359,284 @@ def bulk_poll_accounts_view(request):
             logger.info(f"  {idx}. Account {acc['account_number']} ({acc['account_name']}) - Role: {acc['role_arn']}")
         logger.info("="*80)
 
-        # Poll each account
-        total_accounts = len(accounts)
-        successful = 0
-        failed = 0
-        results = []
+        # Create parent task record and queue Celery task in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='bulk',
+                status='pending',
+                regions=region_list,
+                initiated_by=request.user,
+                total_accounts=len(accounts)
+            )
 
-        for idx, account_config in enumerate(accounts, 1):
-            account_number = account_config['account_number']
-            account_name = account_config['account_name']
-            role_arn = account_config['role_arn']
-            external_id = account_config['external_id']
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            user_id = request.user.id
 
-            logger.info(f"Processing account {idx}/{total_accounts}: {account_number} ({account_name})")
-
-            try:
-                # Build command
-                cmd = [
-                    'python', 'manage.py', 'discover_aws_resources',
-                    account_number,
-                    access_key_id,
-                    secret_access_key,
-                    session_token
-                ] + region_list
-
-                if account_name:
-                    cmd.extend(['--account-name', account_name])
-
-                if role_arn:
-                    cmd.extend(['--role-arn', role_arn])
-
-                if external_id:
-                    cmd.extend(['--external-id', external_id])
-
-                # Execute the command
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd='.',
-                    timeout=300  # 5 minute timeout per account
+            # Queue the bulk discovery task after database commit (prevents race condition)
+            transaction.on_commit(
+                lambda: bulk_discover_resources.delay(
+                    task_record_id=task_id,
+                    access_key_id=access_key_id,
+                    secret_access_key=secret_access_key,
+                    session_token=session_token,
+                    regions=region_list,
+                    accounts_config=accounts,
+                    user_id=user_id
                 )
-
-                if result.returncode == 0:
-                    successful += 1
-                    logger.info(f"✓ SUCCESS: Account {account_number} ({account_name})")
-                    results.append(f'✓ Account {account_number} ({account_name}): Success')
-                else:
-                    failed += 1
-                    error_msg = result.stderr[:200] if result.stderr else 'Unknown error'
-                    logger.error(f"✗ FAILED: Account {account_number} ({account_name}) - {error_msg}")
-                    results.append(f'✗ Account {account_number} ({account_name}): Failed - {error_msg}')
-
-            except subprocess.TimeoutExpired:
-                failed += 1
-                logger.error(f"✗ TIMEOUT: Account {account_number} ({account_name}) after 5 minutes")
-                results.append(f'✗ Account {account_number} ({account_name}): Timeout after 5 minutes')
-            except Exception as e:
-                failed += 1
-                logger.error(f"✗ ERROR: Account {account_number} ({account_name}) - {str(e)}")
-                results.append(f'✗ Account {account_number} ({account_name}): Error - {str(e)}')
-
-        # Log final summary
-        logger.info("="*80)
-        logger.info(f"BULK POLL COMPLETED")
-        logger.info(f"Total accounts: {total_accounts}")
-        logger.info(f"Successful: {successful}")
-        logger.info(f"Failed: {failed}")
-        logger.info(f"Success rate: {(successful/total_accounts*100):.1f}%")
-        logger.info("="*80)
-
-        # Show summary message
-        if successful == total_accounts:
-            messages.success(
-                request,
-                f'Successfully polled all {total_accounts} accounts! '
-                f'Discovered resources in regions: {", ".join(region_list)}'
-            )
-        elif successful > 0:
-            messages.warning(
-                request,
-                f'Bulk polling completed: {successful} succeeded, {failed} failed out of {total_accounts} accounts.'
-            )
-        else:
-            messages.error(
-                request,
-                f'All {total_accounts} accounts failed to poll. Check your credentials and role configuration.'
             )
 
-        # Show detailed results
-        for result_msg in results:
-            if result_msg.startswith('✓'):
-                messages.success(request, result_msg)
-            else:
-                messages.error(request, result_msg)
+        messages.success(
+            request,
+            f'Bulk discovery queued for {len(accounts)} accounts. '
+            f'View progress on the Task Status page.'
+        )
+        return redirect('task_status')
 
     except Exception as e:
         messages.error(request, f'Bulk polling error: {str(e)}')
 
     return redirect('accounts')
+
+
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
+@csrf_exempt
+@require_http_methods(["POST"])
+def repoll_account_view(request, account_id):
+    """Handle re-polling an account using instance role authentication"""
+    from .tasks import repoll_account_with_instance_role
+
+    try:
+        account = get_object_or_404(AWSAccount, id=account_id)
+
+        # Verify account is configured for instance role auth
+        if account.auth_method != 'instance_role':
+            messages.error(request, f'Account {account.account_id} is not configured for instance role authentication.')
+            return redirect('accounts')
+
+        if not account.can_repoll:
+            messages.error(
+                request,
+                f'Account {account.account_id} cannot be re-polled. '
+                f'Ensure default_regions and role configuration are set.'
+            )
+            return redirect('accounts')
+
+        # Create task record and queue in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='single',
+                status='pending',
+                account=account,
+                regions=account.default_regions,
+                initiated_by=request.user,
+                total_accounts=1
+            )
+
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            acct_id = account.id
+
+            # Queue the Celery task after database commit
+            transaction.on_commit(
+                lambda: repoll_account_with_instance_role.delay(
+                    task_record_id=task_id,
+                    account_id=acct_id
+                )
+            )
+
+        messages.success(
+            request,
+            f'Re-poll queued for account {account.account_id} using instance role. '
+            f'View progress on the Task Status page.'
+        )
+        return redirect('task_status')
+
+    except Exception as e:
+        messages.error(request, f'Re-poll error: {str(e)}')
+
+    return redirect('accounts')
+
+
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_repoll_accounts_view(request):
+    """Handle bulk re-polling of accounts using instance role authentication"""
+    from .tasks import bulk_repoll_accounts_with_instance_role
+
+    try:
+        # Get selected account IDs from form
+        account_ids = request.POST.getlist('account_ids')
+
+        if not account_ids:
+            messages.error(request, 'No accounts selected for re-poll.')
+            return redirect('accounts')
+
+        # Filter to only accounts that can be re-polled
+        accounts = AWSAccount.objects.filter(
+            id__in=account_ids,
+            auth_method='instance_role'
+        )
+
+        repollable_accounts = [a for a in accounts if a.can_repoll]
+
+        if not repollable_accounts:
+            messages.error(
+                request,
+                'None of the selected accounts are configured for instance role re-polling.'
+            )
+            return redirect('accounts')
+
+        # Create parent task record and queue in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='bulk',
+                status='pending',
+                regions=[],  # Will be set per-account
+                initiated_by=request.user,
+                total_accounts=len(repollable_accounts)
+            )
+
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            account_id_list = [a.id for a in repollable_accounts]
+            user_id = request.user.id
+
+            # Queue the bulk discovery task after database commit
+            transaction.on_commit(
+                lambda: bulk_repoll_accounts_with_instance_role.delay(
+                    task_record_id=task_id,
+                    account_ids=account_id_list,
+                    user_id=user_id
+                )
+            )
+
+        messages.success(
+            request,
+            f'Bulk re-poll queued for {len(repollable_accounts)} accounts using instance role. '
+            f'View progress on the Task Status page.'
+        )
+        return redirect('task_status')
+
+    except Exception as e:
+        messages.error(request, f'Bulk re-poll error: {str(e)}')
+
+    return redirect('accounts')
+
+
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
+def add_account_view(request):
+    """Add one or more accounts with instance role authentication"""
+    if request.method == 'POST':
+        accounts_config = request.POST.get('accounts_config', '').strip()
+        auth_method = request.POST.get('auth_method', 'instance_role')
+        default_role_name = request.POST.get('default_role_name', 'PaloInventoryInspectionRole').strip()
+        external_id = request.POST.get('external_id', '').strip()
+        default_regions = request.POST.get('default_regions', '').strip()
+
+        if not accounts_config:
+            messages.error(request, 'At least one account is required.')
+            return redirect('add_account')
+
+        # Parse regions
+        region_list = [r.strip() for r in default_regions.split(',') if r.strip()]
+
+        # Parse accounts (format: account_id|account_name per line)
+        added_count = 0
+        skipped_count = 0
+        errors = []
+
+        for line_num, line in enumerate(accounts_config.strip().split('\n'), 1):
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = [p.strip() for p in line.split('|')]
+            account_id = parts[0] if parts else ''
+            account_name = parts[1] if len(parts) > 1 else ''
+
+            # Validate account ID format (12 digits)
+            if not account_id.isdigit() or len(account_id) != 12:
+                errors.append(f'Line {line_num}: Invalid account ID "{account_id}" (must be 12 digits)')
+                continue
+
+            try:
+                account, created = AWSAccount.objects.get_or_create(
+                    account_id=account_id,
+                    defaults={
+                        'account_name': account_name,
+                        'auth_method': auth_method,
+                        'default_role_name': default_role_name,
+                        'external_id': external_id,
+                        'default_regions': region_list,
+                        'is_active': True
+                    }
+                )
+
+                if created:
+                    added_count += 1
+                else:
+                    # Update existing account with new settings if not created
+                    skipped_count += 1
+
+            except Exception as e:
+                errors.append(f'Line {line_num}: Error adding {account_id}: {str(e)}')
+
+        # Show results
+        if added_count > 0:
+            messages.success(request, f'Successfully added {added_count} account(s).')
+        if skipped_count > 0:
+            messages.warning(request, f'{skipped_count} account(s) already existed (skipped).')
+        if errors:
+            messages.error(request, 'Errors: ' + '; '.join(errors[:5]))
+            if len(errors) > 5:
+                messages.error(request, f'... and {len(errors) - 5} more errors.')
+
+        if added_count > 0 or skipped_count > 0:
+            return redirect('accounts')
+        return redirect('add_account')
+
+    # GET request - show form
+    return render(request, 'resources/add_account.html', {
+        'default_role_name': 'PaloInventoryInspectionRole',
+        'default_regions': 'us-east-1,us-west-2',
+    })
+
+
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
+def edit_account_view(request, account_id):
+    """Edit an existing account's configuration"""
+    account = get_object_or_404(AWSAccount, id=account_id)
+
+    if request.method == 'POST':
+        account.account_name = request.POST.get('account_name', '').strip()
+        account.auth_method = request.POST.get('auth_method', 'credentials')
+        account.default_role_name = request.POST.get('default_role_name', '').strip()
+        account.role_arn = request.POST.get('role_arn', '').strip()
+        account.external_id = request.POST.get('external_id', '').strip()
+        account.is_active = request.POST.get('is_active') == 'on'
+
+        # Parse regions
+        default_regions = request.POST.get('default_regions', '').strip()
+        account.default_regions = [r.strip() for r in default_regions.split(',') if r.strip()]
+
+        try:
+            account.save()
+            messages.success(request, f'Account {account.account_id} updated successfully.')
+            return redirect('accounts')
+        except Exception as e:
+            messages.error(request, f'Error updating account: {str(e)}')
+
+    # GET request - show form with current values
+    return render(request, 'resources/edit_account.html', {
+        'account': account,
+        'default_regions_str': ','.join(account.default_regions) if account.default_regions else '',
+    })
 
 
 @login_required
@@ -825,3 +1010,68 @@ def regenerate_token_view(request):
     new_token = request.user.profile.regenerate_token()
     messages.success(request, 'Your API token has been regenerated!')
     return redirect('profile')
+
+
+# Task Status Views
+
+@login_required
+def task_status_view(request):
+    """Display task status page with history"""
+    # Get filter parameters
+    status_filter = request.GET.get('status', '')
+    task_type_filter = request.GET.get('task_type', '')
+
+    # Base queryset
+    if request.user.is_superuser:
+        tasks = DiscoveryTask.objects.all()
+    else:
+        tasks = DiscoveryTask.objects.filter(initiated_by=request.user)
+
+    tasks = tasks.select_related('account', 'initiated_by', 'parent_task')
+
+    # Apply filters
+    if status_filter:
+        tasks = tasks.filter(status=status_filter)
+    if task_type_filter:
+        tasks = tasks.filter(task_type=task_type_filter)
+
+    # Only show parent tasks (not children)
+    tasks = tasks.filter(parent_task__isnull=True).order_by('-created_at')[:50]
+
+    # Get summary stats
+    all_tasks = DiscoveryTask.objects.filter(parent_task__isnull=True)
+    if not request.user.is_superuser:
+        all_tasks = all_tasks.filter(initiated_by=request.user)
+
+    context = {
+        'tasks': tasks,
+        'total_tasks': all_tasks.count(),
+        'pending_count': all_tasks.filter(status='pending').count(),
+        'running_count': all_tasks.filter(status='running').count(),
+        'success_count': all_tasks.filter(status='success').count(),
+        'failed_count': all_tasks.filter(status='failed').count(),
+        'selected_status': status_filter,
+        'selected_task_type': task_type_filter,
+    }
+    return render(request, 'resources/task_status.html', context)
+
+
+@login_required
+def task_detail_view(request, task_id):
+    """Display detailed task information including child tasks"""
+    task = get_object_or_404(
+        DiscoveryTask.objects.select_related('account', 'initiated_by')
+        .prefetch_related('child_tasks__account'),
+        id=task_id
+    )
+
+    # Permission check
+    if not request.user.is_superuser and task.initiated_by != request.user:
+        messages.error(request, 'Access denied.')
+        return redirect('task_status')
+
+    context = {
+        'task': task,
+        'child_tasks': task.child_tasks.all().order_by('-created_at'),
+    }
+    return render(request, 'resources/task_detail.html', context)

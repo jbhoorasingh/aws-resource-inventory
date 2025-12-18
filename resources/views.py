@@ -6,14 +6,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, ENI, 
-    ENISecondaryIP, ENISecurityGroup
+    AWSAccount, VPC, Subnet, SecurityGroup, ENI,
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
 )
 from .serializers import (
     AWSAccountSerializer, VPCSerializer, SubnetSerializer,
     SecurityGroupSerializer, ENISerializer, ENIDetailSerializer,
-    ResourceSummarySerializer, VPCTreeSerializer, SubnetTreeSerializer
+    ResourceSummarySerializer, VPCTreeSerializer, SubnetTreeSerializer,
+    DiscoveryTaskSerializer, DiscoveryTaskDetailSerializer,
+    TriggerDiscoverySerializer, TriggerBulkDiscoverySerializer
 )
 
 
@@ -236,10 +240,176 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
         owner_account = request.query_params.get('owner_account')
         if not owner_account:
             return Response(
-                {'error': 'owner_account parameter is required'}, 
+                {'error': 'owner_account parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         enis = self.get_queryset().filter(owner_account=owner_account)
         serializer = self.get_serializer(enis, many=True)
         return Response(serializer.data)
+
+
+class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing and managing discovery tasks.
+
+    list: Get all discovery tasks (paginated)
+    retrieve: Get details of a specific task including child tasks
+    trigger: Start a new single-account discovery
+    bulk_trigger: Start a new bulk discovery operation
+    cancel: Cancel a pending or running task
+    summary: Get task statistics
+    """
+    queryset = DiscoveryTask.objects.select_related(
+        'account', 'initiated_by', 'parent_task'
+    ).prefetch_related('child_tasks')
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['status', 'task_type', 'account']
+    ordering_fields = ['created_at', 'started_at', 'completed_at']
+    ordering = ['-created_at']
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return DiscoveryTaskDetailSerializer
+        return DiscoveryTaskSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Filter to show only tasks initiated by the user or all if superuser
+        if not self.request.user.is_superuser:
+            qs = qs.filter(initiated_by=self.request.user)
+        return qs
+
+    @action(detail=False, methods=['post'])
+    def trigger(self, request):
+        """Trigger a single account discovery task"""
+        from .tasks import discover_account_resources
+
+        # Check permission
+        if not (request.user.has_perm('resources.can_poll_accounts') or
+                request.user.is_superuser):
+            return Response(
+                {'error': 'Permission denied. You need the can_poll_accounts permission.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = TriggerDiscoverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Get or create account immediately
+        account, _ = AWSAccount.objects.get_or_create(
+            account_id=data['account_number'],
+            defaults={
+                'account_name': data.get('account_name', ''),
+                'role_arn': data.get('role_arn', ''),
+                'external_id': data.get('external_id', ''),
+            }
+        )
+
+        # Create task record
+        task_record = DiscoveryTask.objects.create(
+            task_type='single',
+            status='pending',
+            account=account,
+            regions=data['regions'],
+            initiated_by=request.user,
+            total_accounts=1
+        )
+
+        # Queue the Celery task
+        discover_account_resources.delay(
+            task_record_id=task_record.id,
+            account_number=data['account_number'],
+            account_name=data.get('account_name', ''),
+            access_key_id=data['access_key_id'],
+            secret_access_key=data['secret_access_key'],
+            session_token=data.get('session_token', ''),
+            regions=data['regions'],
+            role_arn=data.get('role_arn'),
+            external_id=data.get('external_id')
+        )
+
+        return Response(
+            DiscoveryTaskSerializer(task_record).data,
+            status=status.HTTP_202_ACCEPTED
+        )
+
+    @action(detail=False, methods=['post'])
+    def bulk_trigger(self, request):
+        """Trigger bulk discovery across multiple accounts"""
+        from .tasks import bulk_discover_resources
+
+        # Check permission
+        if not (request.user.has_perm('resources.can_poll_accounts') or
+                request.user.is_superuser):
+            return Response(
+                {'error': 'Permission denied. You need the can_poll_accounts permission.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = TriggerBulkDiscoverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Create parent task record
+        task_record = DiscoveryTask.objects.create(
+            task_type='bulk',
+            status='pending',
+            regions=data['regions'],
+            initiated_by=request.user,
+            total_accounts=len(data['accounts'])
+        )
+
+        # Queue the bulk discovery task
+        bulk_discover_resources.delay(
+            task_record_id=task_record.id,
+            access_key_id=data['access_key_id'],
+            secret_access_key=data['secret_access_key'],
+            session_token=data.get('session_token', ''),
+            regions=data['regions'],
+            accounts_config=[dict(a) for a in data['accounts']],
+            user_id=request.user.id
+        )
+
+        return Response(
+            DiscoveryTaskSerializer(task_record).data,
+            status=status.HTTP_202_ACCEPTED
+        )
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a pending or running task"""
+        task = self.get_object()
+
+        if task.status not in ['pending', 'running']:
+            return Response(
+                {'error': 'Only pending or running tasks can be cancelled'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Revoke the Celery task if it has a task_id
+        if task.task_id:
+            from aws_inventory.celery import app
+            app.control.revoke(task.task_id, terminate=True)
+
+        task.status = 'cancelled'
+        task.completed_at = timezone.now()
+        task.save()
+
+        return Response(DiscoveryTaskSerializer(task).data)
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get summary statistics of discovery tasks"""
+        qs = self.get_queryset()
+
+        return Response({
+            'total_tasks': qs.count(),
+            'pending': qs.filter(status='pending').count(),
+            'running': qs.filter(status='running').count(),
+            'success': qs.filter(status='success').count(),
+            'failed': qs.filter(status='failed').count(),
+            'cancelled': qs.filter(status='cancelled').count(),
+        })

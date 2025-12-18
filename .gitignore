@@ -8,6 +8,10 @@ __pycache__
 *.pyw
 *.pyz
 
+*.bak
+*.backup
+*.backup.gz
+
 db.sqlite3
 .env
 .env.production

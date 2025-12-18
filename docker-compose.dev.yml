@@ -1,21 +1,44 @@
 # Development docker-compose configuration
 # Usage: docker-compose -f docker-compose.dev.yml up
+#
+# Create a .env file with your settings (copy from .env.example).
+# Superuser will be created on first start using DJANGO_SUPERUSER_* variables.
 
 services:
   # PostgreSQL Database
   db:
     image: postgres:16-alpine
     container_name: aws-inventory-dev-db
+    env_file: .env
     environment:
-      POSTGRES_DB: awsinventory_dev
-      POSTGRES_USER: awsinventory
-      POSTGRES_PASSWORD: devpassword
+      # Override for dev if needed
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory_dev}
     ports:
       - "5432:5432"  # Expose for local tools
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     networks:
       - aws-inventory-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-awsinventory}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: aws-inventory-dev-redis
+    ports:
+      - "6379:6379"  # Expose for local tools
+    networks:
+      - aws-inventory-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # Django Application (Development)
@@ -25,18 +48,20 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: aws-inventory-dev-web
+    entrypoint: /app/scripts/docker-entrypoint-dev.sh
     command: python manage.py runserver 0.0.0.0:8000
+    env_file: .env
     environment:
+      # Docker-specific overrides
       DJANGO_SETTINGS_MODULE: aws_inventory.settings
-      SECRET_KEY: dev-secret-key-not-for-production
       DEBUG: "True"
       ALLOWED_HOSTS: "*"
-      DATABASE_URL: postgresql://awsinventory:devpassword@db:5432/awsinventory_dev
+      # Database - use Docker service name
+      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
       POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: awsinventory_dev
-      POSTGRES_USER: awsinventory
-      POSTGRES_PASSWORD: devpassword
+      # Celery - use Docker service name
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
@@ -46,7 +71,41 @@ services:
     networks:
       - aws-inventory-dev-network
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery Worker (Development)
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: aws-inventory-dev-celery
+    command: celery -A aws_inventory worker -l INFO
+    env_file: .env
+    environment:
+      # Docker-specific overrides
+      DJANGO_SETTINGS_MODULE: aws_inventory.settings
+      DEBUG: "True"
+      # Database - use Docker service name
+      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
+      POSTGRES_HOST: db
+      # Celery - use Docker service name
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - .:/app
+      - /app/.venv  # Exclude venv from mount
+    networks:
+      - aws-inventory-dev-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
