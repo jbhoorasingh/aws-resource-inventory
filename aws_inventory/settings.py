@@ -74,12 +74,45 @@ TEMPLATES = [
 WSGI_APPLICATION = 'aws_inventory.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use DATABASE_URL if available, otherwise fall back to individual settings or SQLite
+DATABASE_URL = config('DATABASE_URL', default='')
+
+if DATABASE_URL:
+    # Parse DATABASE_URL (format: postgresql://user:password@host:port/dbname)
+    import urllib.parse
+    url = urllib.parse.urlparse(DATABASE_URL)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': url.path[1:],  # Remove leading slash
+            'USER': url.username,
+            'PASSWORD': url.password,
+            'HOST': url.hostname,
+            'PORT': url.port or '5432',
+        }
     }
-}
+else:
+    # Fall back to individual PostgreSQL settings or SQLite
+    POSTGRES_HOST = config('POSTGRES_HOST', default='')
+    if POSTGRES_HOST:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': config('POSTGRES_DB', default='awsinventory'),
+                'USER': config('POSTGRES_USER', default='awsinventory'),
+                'PASSWORD': config('POSTGRES_PASSWORD', default=''),
+                'HOST': POSTGRES_HOST,
+                'PORT': config('POSTGRES_PORT', default='5432'),
+            }
+        }
+    else:
+        # Default to SQLite for local development without Docker
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -142,6 +175,17 @@ AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default='')
 AWS_SESSION_TOKEN = config('AWS_SESSION_TOKEN', default='')
 AWS_DEFAULT_REGION = config('AWS_DEFAULT_REGION', default='us-east-1')
 AWS_REGIONS = config('AWS_REGIONS', default='us-east-1,us-west-2', cast=lambda v: [s.strip() for s in v.split(',')])
+
+# Celery Configuration
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes soft limit
 
 # Logging Configuration
 LOGGING = {

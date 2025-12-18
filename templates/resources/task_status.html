@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block title %}Task Status - AWS Resource Inventory{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="flex justify-between items-center fade-in mb-8">
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-tasks text-aws-orange"></i> Discovery Tasks
+        </h2>
+        <p class="text-gray-600">Monitor and track AWS resource discovery operations</p>
+    </div>
+    <a href="{% url 'accounts' %}" class="bg-aws-orange hover:bg-aws-orange-dark text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center">
+        <i class="fas fa-plus mr-2"></i> New Discovery
+    </a>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 fade-in">
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-2xl font-bold text-gray-900">{{ total_tasks }}</div>
+        <div class="text-sm text-gray-500">Total Tasks</div>
+    </div>
+    <div class="bg-yellow-50 rounded-lg shadow p-4 border-l-4 border-yellow-400">
+        <div class="text-2xl font-bold text-yellow-600">{{ pending_count }}</div>
+        <div class="text-sm text-gray-500">Pending</div>
+    </div>
+    <div class="bg-blue-50 rounded-lg shadow p-4 border-l-4 border-blue-400">
+        <div class="text-2xl font-bold text-blue-600">{{ running_count }}</div>
+        <div class="text-sm text-gray-500">Running</div>
+    </div>
+    <div class="bg-green-50 rounded-lg shadow p-4 border-l-4 border-green-400">
+        <div class="text-2xl font-bold text-green-600">{{ success_count }}</div>
+        <div class="text-sm text-gray-500">Completed</div>
+    </div>
+    <div class="bg-red-50 rounded-lg shadow p-4 border-l-4 border-red-400">
+        <div class="text-2xl font-bold text-red-600">{{ failed_count }}</div>
+        <div class="text-sm text-gray-500">Failed</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white shadow-lg rounded-lg mb-6 fade-in">
+    <div class="p-4 border-b border-gray-200">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-aws-orange focus:ring focus:ring-aws-orange focus:ring-opacity-50 text-sm">
+                    <option value="">All Statuses</option>
+                    <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="running" {% if selected_status == 'running' %}selected{% endif %}>Running</option>
+                    <option value="success" {% if selected_status == 'success' %}selected{% endif %}>Success</option>
+                    <option value="failed" {% if selected_status == 'failed' %}selected{% endif %}>Failed</option>
+                    <option value="cancelled" {% if selected_status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select name="task_type" class="rounded-md border-gray-300 shadow-sm focus:border-aws-orange focus:ring focus:ring-aws-orange focus:ring-opacity-50 text-sm">
+                    <option value="">All Types</option>
+                    <option value="single" {% if selected_task_type == 'single' %}selected{% endif %}>Single Account</option>
+                    <option value="bulk" {% if selected_task_type == 'bulk' %}selected{% endif %}>Bulk Discovery</option>
+                </select>
+            </div>
+            <button type="submit" class="bg-aws-dark hover:bg-aws-light text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm">
+                <i class="fas fa-filter mr-1"></i> Filter
+            </button>
+            <a href="{% url 'task_status' %}" class="text-gray-600 hover:text-gray-800 py-2 px-4 text-sm">
+                <i class="fas fa-times mr-1"></i> Clear
+            </a>
+        </form>
+    </div>
+</div>
+
+<!-- Task List -->
+<div class="bg-white shadow-lg rounded-lg fade-in">
+    <div class="overflow-x-auto">
+        <table class="w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for task in tasks %}
+                <tr class="hover:bg-gray-50 transition-colors duration-150">
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        {% if task.task_type == 'bulk' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                <i class="fas fa-layer-group mr-1"></i> Bulk
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <i class="fas fa-sync mr-1"></i> Single
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4">
+                        {% if task.account %}
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">{{ task.account.account_id }}</code>
+                            {% if task.account.account_name %}
+                                <div class="text-xs text-gray-500 mt-1">{{ task.account.account_name }}</div>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-500 text-sm">{{ task.total_accounts }} accounts</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        {% if task.status == 'pending' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <i class="fas fa-clock mr-1"></i> Pending
+                            </span>
+                        {% elif task.status == 'running' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> Running
+                            </span>
+                        {% elif task.status == 'success' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <i class="fas fa-check mr-1"></i> Success
+                            </span>
+                        {% elif task.status == 'failed' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <i class="fas fa-times mr-1"></i> Failed
+                            </span>
+                        {% elif task.status == 'cancelled' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <i class="fas fa-ban mr-1"></i> Cancelled
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4">
+                        {% if task.task_type == 'bulk' %}
+                            <div class="w-32">
+                                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                                    <span>{{ task.completed_accounts }}/{{ task.total_accounts }}</span>
+                                    <span>{{ task.progress_percentage }}%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-aws-orange h-2 rounded-full transition-all duration-300" style="width: {{ task.progress_percentage }}%"></div>
+                                </div>
+                                {% if task.failed_accounts > 0 %}
+                                    <div class="text-xs text-red-500 mt-1">{{ task.failed_accounts }} failed</div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if task.started_at %}
+                            {{ task.started_at|timesince }} ago
+                        {% else %}
+                            <span class="text-gray-400">Not started</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if task.duration %}
+                            {{ task.duration|floatformat:1 }}s
+                        {% else %}
+                            <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        <a href="{% url 'task_detail' task.id %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            <i class="fas fa-eye mr-1"></i> View
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="px-4 py-12 text-center text-gray-500">
+                        <i class="fas fa-inbox text-4xl text-gray-300 mb-4"></i>
+                        <p>No discovery tasks found.</p>
+                        <a href="{% url 'accounts' %}" class="text-aws-orange hover:text-aws-orange-dark mt-2 inline-block">
+                            Start a new discovery
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh page every 10 seconds if there are running tasks
+{% if running_count > 0 or pending_count > 0 %}
+setTimeout(function() {
+    window.location.reload();
+}, 10000);
+{% endif %}
+</script>
+{% endblock %}

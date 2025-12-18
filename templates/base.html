@@ -66,6 +66,9 @@
                         <a href="{% url 'edl_summary' %}" class="{% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
                             <i class="fas fa-list-alt mr-2"></i> EDL
                         </a>
+                        <a href="{% url 'task_status' %}" class="{% if request.resolver_match.url_name == 'task_status' or request.resolver_match.url_name == 'task_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
+                            <i class="fas fa-tasks mr-2"></i> Tasks
+                        </a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">

@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Task Details - AWS Resource Inventory{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="mb-6 fade-in">
+    <ol class="flex items-center space-x-2 text-sm text-gray-500">
+        <li><a href="{% url 'task_status' %}" class="hover:text-aws-orange"><i class="fas fa-tasks mr-1"></i> Tasks</a></li>
+        <li><i class="fas fa-chevron-right text-xs"></i></li>
+        <li class="text-gray-900">Task #{{ task.id }}</li>
+    </ol>
+</nav>
+
+<!-- Page Header -->
+<div class="flex justify-between items-start fade-in mb-8">
+    <div>
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            {% if task.task_type == 'bulk' %}
+                <i class="fas fa-layer-group text-purple-500"></i> Bulk Discovery Task
+            {% else %}
+                <i class="fas fa-sync text-blue-500"></i> Single Account Discovery
+            {% endif %}
+        </h2>
+        <p class="text-gray-600">
+            {% if task.account %}
+                Account: <code class="bg-gray-100 px-2 py-0.5 rounded font-mono">{{ task.account.account_id }}</code>
+                {% if task.account.account_name %}({{ task.account.account_name }}){% endif %}
+            {% else %}
+                {{ task.total_accounts }} accounts
+            {% endif %}
+        </p>
+    </div>
+    <div class="flex items-center space-x-4">
+        {% if task.status == 'pending' %}
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                <i class="fas fa-clock mr-2"></i> Pending
+            </span>
+        {% elif task.status == 'running' %}
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                <i class="fas fa-spinner fa-spin mr-2"></i> Running
+            </span>
+        {% elif task.status == 'success' %}
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                <i class="fas fa-check mr-2"></i> Success
+            </span>
+        {% elif task.status == 'failed' %}
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                <i class="fas fa-times mr-2"></i> Failed
+            </span>
+        {% elif task.status == 'cancelled' %}
+            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                <i class="fas fa-ban mr-2"></i> Cancelled
+            </span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Task Details Card -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 fade-in">
+    <!-- Task Information -->
+    <div class="bg-white shadow-lg rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-info-circle text-aws-orange mr-2"></i> Task Information
+        </h3>
+        <dl class="space-y-3">
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Task ID</dt>
+                <dd class="text-gray-900 font-mono text-sm">{{ task.task_id|default:"-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Type</dt>
+                <dd class="text-gray-900">{{ task.get_task_type_display }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Initiated By</dt>
+                <dd class="text-gray-900">{{ task.initiated_by.username|default:"-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Regions</dt>
+                <dd class="text-gray-900">
+                    {% for region in task.regions %}
+                        <span class="inline-block bg-gray-100 px-2 py-0.5 rounded text-xs mr-1 mb-1">{{ region }}</span>
+                    {% endfor %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Created</dt>
+                <dd class="text-gray-900">{{ task.created_at }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Started</dt>
+                <dd class="text-gray-900">{{ task.started_at|default:"-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Completed</dt>
+                <dd class="text-gray-900">{{ task.completed_at|default:"-" }}</dd>
+            </div>
+            {% if task.duration %}
+            <div class="flex justify-between">
+                <dt class="text-gray-500">Duration</dt>
+                <dd class="text-gray-900">{{ task.duration|floatformat:1 }} seconds</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Progress / Results -->
+    <div class="bg-white shadow-lg rounded-lg p-6">
+        {% if task.task_type == 'bulk' %}
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-chart-pie text-aws-orange mr-2"></i> Progress
+            </h3>
+            <div class="mb-6">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>{{ task.completed_accounts }} of {{ task.total_accounts }} accounts</span>
+                    <span>{{ task.progress_percentage }}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div class="bg-aws-orange h-4 rounded-full transition-all duration-300" style="width: {{ task.progress_percentage }}%"></div>
+                </div>
+            </div>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Total Accounts</dt>
+                    <dd class="text-gray-900 font-medium">{{ task.total_accounts }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-green-600"><i class="fas fa-check mr-1"></i> Completed</dt>
+                    <dd class="text-green-600 font-medium">{{ task.completed_accounts }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-red-600"><i class="fas fa-times mr-1"></i> Failed</dt>
+                    <dd class="text-red-600 font-medium">{{ task.failed_accounts }}</dd>
+                </div>
+            </dl>
+        {% else %}
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-clipboard-list text-aws-orange mr-2"></i> Results
+            </h3>
+            {% if task.result_summary %}
+                <dl class="space-y-3">
+                    {% for key, value in task.result_summary.items %}
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500">{{ key|title }}</dt>
+                            <dd class="text-gray-900 font-medium">{{ value }}</dd>
+                        </div>
+                    {% endfor %}
+                </dl>
+            {% else %}
+                <p class="text-gray-500">No results available yet.</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Error Message -->
+{% if task.error_message %}
+<div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-6 mb-8 fade-in">
+    <h3 class="text-lg font-semibold text-red-800 mb-2">
+        <i class="fas fa-exclamation-triangle mr-2"></i> Error Details
+    </h3>
+    <pre class="text-red-700 text-sm whitespace-pre-wrap font-mono bg-red-100 p-4 rounded">{{ task.error_message }}</pre>
+</div>
+{% endif %}
+
+<!-- Child Tasks (for bulk operations) -->
+{% if child_tasks %}
+<div class="bg-white shadow-lg rounded-lg fade-in">
+    <div class="p-6 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-list text-aws-orange mr-2"></i> Account Tasks ({{ child_tasks|length }})
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for child in child_tasks %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-4">
+                        {% if child.account %}
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">{{ child.account.account_id }}</code>
+                            {% if child.account.account_name %}
+                                <div class="text-xs text-gray-500 mt-1">{{ child.account.account_name }}</div>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        {% if child.status == 'pending' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <i class="fas fa-clock mr-1"></i> Pending
+                            </span>
+                        {% elif child.status == 'running' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> Running
+                            </span>
+                        {% elif child.status == 'success' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <i class="fas fa-check mr-1"></i> Success
+                            </span>
+                        {% elif child.status == 'failed' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <i class="fas fa-times mr-1"></i> Failed
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if child.started_at %}
+                            {{ child.started_at|timesince }} ago
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if child.duration %}
+                            {{ child.duration|floatformat:1 }}s
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-red-600">
+                        {% if child.error_message %}
+                            <span class="truncate block max-w-xs" title="{{ child.error_message }}">
+                                {{ child.error_message|truncatewords:10 }}
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Back Button -->
+<div class="mt-8 fade-in">
+    <a href="{% url 'task_status' %}" class="text-gray-600 hover:text-gray-900">
+        <i class="fas fa-arrow-left mr-2"></i> Back to Tasks
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh page every 5 seconds if task is still running
+{% if task.status == 'running' or task.status == 'pending' %}
+setTimeout(function() {
+    window.location.reload();
+}, 5000);
+{% endif %}
+</script>
+{% endblock %}

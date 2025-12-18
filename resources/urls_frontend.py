@@ -31,9 +31,19 @@ urlpatterns = [
     path('edl/sg/<str:sg_id>/', views_edl.edl_security_group_ips, name='edl_security_group_ips'),
     path('edl/sg/<str:sg_id>/json/', views_edl.edl_security_group_json, name='edl_security_group_json'),
 
-    # Account polling
+    # Account polling (with credentials)
     path('poll-account/', views_frontend.poll_account_view, name='poll_account'),
     path('bulk-poll-accounts/', views_frontend.bulk_poll_accounts_view, name='bulk_poll_accounts'),
+
+    # Account management
+    path('accounts/add/', views_frontend.add_account_view, name='add_account'),
+    path('accounts/<int:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
+    path('accounts/<int:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
+    path('accounts/bulk-repoll/', views_frontend.bulk_repoll_accounts_view, name='bulk_repoll_accounts'),
+
+    # Task status
+    path('tasks/', views_frontend.task_status_view, name='task_status'),
+    path('tasks/<int:task_id>/', views_frontend.task_detail_view, name='task_detail'),
 
     # API endpoints
     path('api/accounts/', views_frontend.api_accounts_json, name='api_accounts'),

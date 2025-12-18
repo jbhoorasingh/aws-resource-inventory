@@ -4,7 +4,7 @@ Serializers for AWS resources API
 from rest_framework import serializers
 from .models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
-    ENISecondaryIP, ENISecurityGroup
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
 )
 
 
@@ -261,3 +261,71 @@ class VPCTreeSerializer(serializers.ModelSerializer):
             'ec2_instance_count': ec2_count,
             'security_group_count': sg_count
         }
+
+
+# Discovery Task Serializers
+class DiscoveryTaskSerializer(serializers.ModelSerializer):
+    """Serializer for discovery task listing"""
+    account_id = serializers.CharField(source='account.account_id',
+                                        read_only=True, allow_null=True)
+    account_name = serializers.CharField(source='account.account_name',
+                                          read_only=True, allow_null=True)
+    initiated_by_username = serializers.CharField(source='initiated_by.username',
+                                                   read_only=True, allow_null=True)
+    duration = serializers.SerializerMethodField()
+    progress_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DiscoveryTask
+        fields = [
+            'id', 'task_id', 'task_type', 'status', 'account_id', 'account_name',
+            'regions', 'initiated_by_username', 'result_summary', 'error_message',
+            'total_accounts', 'completed_accounts', 'failed_accounts',
+            'progress_percentage', 'duration', 'created_at', 'started_at',
+            'completed_at'
+        ]
+
+    def get_duration(self, obj):
+        return obj.duration
+
+    def get_progress_percentage(self, obj):
+        return obj.progress_percentage
+
+
+class DiscoveryTaskDetailSerializer(DiscoveryTaskSerializer):
+    """Detailed serializer including child tasks"""
+    child_tasks = DiscoveryTaskSerializer(many=True, read_only=True)
+
+    class Meta(DiscoveryTaskSerializer.Meta):
+        fields = DiscoveryTaskSerializer.Meta.fields + ['child_tasks']
+
+
+class TriggerDiscoverySerializer(serializers.Serializer):
+    """Serializer for triggering single account discovery"""
+    account_number = serializers.CharField(max_length=12)
+    account_name = serializers.CharField(max_length=255, required=False,
+                                          allow_blank=True, default='')
+    access_key_id = serializers.CharField()
+    secret_access_key = serializers.CharField()
+    session_token = serializers.CharField(required=False, allow_blank=True, default='')
+    regions = serializers.ListField(child=serializers.CharField())
+    role_arn = serializers.CharField(required=False, allow_blank=True, default='')
+    external_id = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class BulkDiscoveryAccountSerializer(serializers.Serializer):
+    """Serializer for individual account in bulk discovery"""
+    account_number = serializers.CharField(max_length=12)
+    account_name = serializers.CharField(max_length=255, required=False,
+                                          allow_blank=True, default='')
+    role_arn = serializers.CharField(required=False, allow_blank=True, default='')
+    external_id = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class TriggerBulkDiscoverySerializer(serializers.Serializer):
+    """Serializer for triggering bulk discovery"""
+    access_key_id = serializers.CharField()
+    secret_access_key = serializers.CharField()
+    session_token = serializers.CharField(required=False, allow_blank=True, default='')
+    regions = serializers.ListField(child=serializers.CharField())
+    accounts = BulkDiscoveryAccountSerializer(many=True)
