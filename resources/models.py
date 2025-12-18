@@ -65,14 +65,43 @@ def create_auth_token(sender, instance, created, **kwargs):
 
 class AWSAccount(models.Model):
     """AWS Account information"""
+
+    AUTH_METHOD_CHOICES = [
+        ('credentials', 'Access Keys (Manual)'),
+        ('instance_role', 'EC2 Instance Role'),
+    ]
+
     account_id = models.CharField(max_length=12, unique=True, help_text="AWS Account ID")
     account_name = models.CharField(max_length=255, blank=True, help_text="Account name or alias")
     is_active = models.BooleanField(default=True, help_text="Whether this account is actively monitored")
     last_polled = models.DateTimeField(null=True, blank=True, help_text="Last time resources were polled for this account")
 
+    # Authentication method
+    auth_method = models.CharField(
+        max_length=20,
+        choices=AUTH_METHOD_CHOICES,
+        default='credentials',
+        help_text="Authentication method for polling this account"
+    )
+
     # Role assumption configuration
     role_arn = models.CharField(max_length=2048, blank=True, help_text="IAM Role ARN to assume when discovering resources in this account")
     external_id = models.CharField(max_length=1224, blank=True, help_text="External ID for role assumption (optional, for additional security)")
+
+    # Default role name for instance role auth (e.g., 'PaloInventoryInspectionRole')
+    default_role_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='PaloInventoryInspectionRole',
+        help_text="Default IAM role name to assume in this account (used with instance role auth)"
+    )
+
+    # Regions to poll for this account (optional - if set, will be used for re-polling)
+    default_regions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Default regions to poll for this account (e.g., ['us-east-1', 'us-west-2'])"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -82,6 +111,19 @@ class AWSAccount(models.Model):
 
     def __str__(self):
         return f"{self.account_name} ({self.account_id})" if self.account_name else self.account_id
+
+    def get_role_arn(self):
+        """Get the role ARN, constructing from default_role_name if not explicitly set"""
+        if self.role_arn:
+            return self.role_arn
+        elif self.default_role_name:
+            return f"arn:aws:iam::{self.account_id}:role/{self.default_role_name}"
+        return None
+
+    @property
+    def can_repoll(self):
+        """Check if this account can be re-polled with stored configuration"""
+        return self.auth_method == 'instance_role' and bool(self.get_role_arn()) and bool(self.default_regions)
 
 
 class VPC(models.Model):
@@ -253,3 +295,93 @@ class ENISecurityGroup(models.Model):
 
     def __str__(self):
         return f"{self.eni.eni_id} - {self.security_group.name}"
+
+
+class DiscoveryTask(models.Model):
+    """Task audit log for AWS resource discovery operations"""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    TASK_TYPE_CHOICES = [
+        ('single', 'Single Account'),
+        ('bulk', 'Bulk Discovery'),
+    ]
+
+    # Task identification
+    task_id = models.CharField(
+        max_length=255, unique=True, null=True, blank=True, db_index=True,
+        help_text="Celery task ID"
+    )
+    task_type = models.CharField(
+        max_length=20, choices=TASK_TYPE_CHOICES, default='single'
+    )
+
+    # Task metadata
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True
+    )
+    account = models.ForeignKey(
+        AWSAccount, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='discovery_tasks'
+    )
+    regions = models.JSONField(default=list, help_text="List of regions to scan")
+
+    # User tracking
+    initiated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='discovery_tasks'
+    )
+
+    # Results tracking
+    result_summary = models.JSONField(
+        default=dict, blank=True, help_text="Summary of discovered resources"
+    )
+    error_message = models.TextField(blank=True, help_text="Error details if task failed")
+
+    # Progress tracking (for bulk operations)
+    total_accounts = models.IntegerField(default=1)
+    completed_accounts = models.IntegerField(default=0)
+    failed_accounts = models.IntegerField(default=0)
+
+    # Parent task for bulk operations
+    parent_task = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='child_tasks'
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['account', 'created_at']),
+            models.Index(fields=['initiated_by', 'created_at']),
+        ]
+
+    def __str__(self):
+        account_str = self.account.account_id if self.account else 'Bulk'
+        return f"{self.task_type} - {self.status} - {account_str}"
+
+    @property
+    def duration(self):
+        """Calculate task duration in seconds"""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+
+    @property
+    def progress_percentage(self):
+        """Calculate progress for bulk tasks"""
+        if self.total_accounts > 0:
+            return int((self.completed_accounts + self.failed_accounts) /
+                       self.total_accounts * 100)
+        return 0
