@@ -15,21 +15,41 @@ class AWSResourceDiscovery:
 
     def __init__(self, access_key_id: str = None, secret_access_key: str = None,
                  session_token: str = None, region: str = None, role_arn: str = None,
-                 external_id: str = None):
-        self.access_key_id = access_key_id or settings.AWS_ACCESS_KEY_ID
-        self.secret_access_key = secret_access_key or settings.AWS_SECRET_ACCESS_KEY
-        self.session_token = session_token or settings.AWS_SESSION_TOKEN
+                 external_id: str = None, use_instance_role: bool = False):
+        """
+        Initialize AWS discovery service.
+
+        Args:
+            access_key_id: AWS access key ID (optional if using instance role)
+            secret_access_key: AWS secret access key (optional if using instance role)
+            session_token: AWS session token (optional)
+            region: AWS region (default: from settings)
+            role_arn: IAM role ARN to assume in the target account
+            external_id: External ID for role assumption
+            use_instance_role: If True, use EC2 instance role credentials instead of explicit keys
+        """
         self.region = region or settings.AWS_DEFAULT_REGION
         self.role_arn = role_arn
         self.external_id = external_id
+        self.use_instance_role = use_instance_role
 
-        # Initialize base AWS session with provided credentials
-        base_session = boto3.Session(
-            aws_access_key_id=self.access_key_id,
-            aws_secret_access_key=self.secret_access_key,
-            aws_session_token=self.session_token,
-            region_name=self.region
-        )
+        if use_instance_role:
+            # Use instance role credentials (boto3 default credential chain)
+            # This automatically picks up credentials from EC2 instance metadata
+            logger.info("Using EC2 instance role credentials")
+            base_session = boto3.Session(region_name=self.region)
+        else:
+            # Use explicit credentials
+            self.access_key_id = access_key_id or settings.AWS_ACCESS_KEY_ID
+            self.secret_access_key = secret_access_key or settings.AWS_SECRET_ACCESS_KEY
+            self.session_token = session_token or settings.AWS_SESSION_TOKEN
+
+            base_session = boto3.Session(
+                aws_access_key_id=self.access_key_id,
+                aws_secret_access_key=self.secret_access_key,
+                aws_session_token=self.session_token,
+                region_name=self.region
+            )
 
         # If role_arn is provided, assume the role
         if self.role_arn:
