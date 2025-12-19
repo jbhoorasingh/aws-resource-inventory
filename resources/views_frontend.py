@@ -529,14 +529,79 @@ def bulk_repoll_accounts_view(request):
 
 @login_required
 @permission_required('resources.can_poll_accounts', raise_exception=True)
+@csrf_exempt
+@require_http_methods(["POST"])
+def repoll_all_instance_role_accounts_view(request):
+    """Re-poll ALL accounts configured with instance role authentication"""
+    from .tasks import bulk_repoll_accounts_with_instance_role
+
+    try:
+        # Get all accounts with instance_role auth method that can be re-polled
+        all_instance_role_accounts = AWSAccount.objects.filter(
+            auth_method='instance_role',
+            is_active=True
+        )
+
+        repollable_accounts = [a for a in all_instance_role_accounts if a.can_repoll]
+
+        if not repollable_accounts:
+            messages.warning(
+                request,
+                'No accounts are configured for instance role re-polling. '
+                'Ensure accounts have auth method set to "Instance Role", a role name configured, and default regions set.'
+            )
+            return redirect('accounts')
+
+        # Create parent task record and queue in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='bulk',
+                status='pending',
+                regions=[],  # Will be set per-account
+                initiated_by=request.user,
+                total_accounts=len(repollable_accounts)
+            )
+
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            account_id_list = [a.id for a in repollable_accounts]
+            user_id = request.user.id
+
+            # Queue the bulk discovery task after database commit
+            transaction.on_commit(
+                lambda: bulk_repoll_accounts_with_instance_role.delay(
+                    task_record_id=task_id,
+                    account_ids=account_id_list,
+                    user_id=user_id
+                )
+            )
+
+        messages.success(
+            request,
+            f'Re-poll queued for ALL {len(repollable_accounts)} instance role accounts. '
+            f'View progress on the Task Status page.'
+        )
+        return redirect('task_status')
+
+    except Exception as e:
+        messages.error(request, f'Re-poll all error: {str(e)}')
+
+    return redirect('accounts')
+
+
+@login_required
+@permission_required('resources.can_poll_accounts', raise_exception=True)
 def add_account_view(request):
     """Add one or more accounts with instance role authentication"""
+    from .tasks import bulk_repoll_accounts_with_instance_role
+
     if request.method == 'POST':
         accounts_config = request.POST.get('accounts_config', '').strip()
         auth_method = request.POST.get('auth_method', 'instance_role')
         default_role_name = request.POST.get('default_role_name', 'PaloInventoryInspectionRole').strip()
         external_id = request.POST.get('external_id', '').strip()
         default_regions = request.POST.get('default_regions', '').strip()
+        auto_poll = request.POST.get('auto_poll') == 'on'
 
         if not accounts_config:
             messages.error(request, 'At least one account is required.')
@@ -549,6 +614,7 @@ def add_account_view(request):
         added_count = 0
         skipped_count = 0
         errors = []
+        added_accounts = []  # Track successfully added accounts
 
         for line_num, line in enumerate(accounts_config.strip().split('\n'), 1):
             line = line.strip()
@@ -579,6 +645,7 @@ def add_account_view(request):
 
                 if created:
                     added_count += 1
+                    added_accounts.append(account)
                 else:
                     # Update existing account with new settings if not created
                     skipped_count += 1
@@ -595,6 +662,38 @@ def add_account_view(request):
             messages.error(request, 'Errors: ' + '; '.join(errors[:5]))
             if len(errors) > 5:
                 messages.error(request, f'... and {len(errors) - 5} more errors.')
+
+        # Auto-poll newly added accounts if using instance role and auto_poll is enabled
+        if auto_poll and added_accounts and auth_method == 'instance_role' and region_list:
+            repollable_accounts = [a for a in added_accounts if a.can_repoll]
+            if repollable_accounts:
+                with transaction.atomic():
+                    task_record = DiscoveryTask.objects.create(
+                        task_type='bulk',
+                        status='pending',
+                        regions=[],
+                        initiated_by=request.user,
+                        total_accounts=len(repollable_accounts)
+                    )
+
+                    task_id = task_record.id
+                    account_id_list = [a.id for a in repollable_accounts]
+                    user_id = request.user.id
+
+                    transaction.on_commit(
+                        lambda: bulk_repoll_accounts_with_instance_role.delay(
+                            task_record_id=task_id,
+                            account_ids=account_id_list,
+                            user_id=user_id
+                        )
+                    )
+
+                messages.info(
+                    request,
+                    f'Auto-polling {len(repollable_accounts)} new account(s). '
+                    f'View progress on the Task Status page.'
+                )
+                return redirect('task_status')
 
         if added_count > 0 or skipped_count > 0:
             return redirect('accounts')

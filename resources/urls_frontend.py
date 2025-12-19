@@ -40,6 +40,7 @@ urlpatterns = [
     path('accounts/<int:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
     path('accounts/<int:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
     path('accounts/bulk-repoll/', views_frontend.bulk_repoll_accounts_view, name='bulk_repoll_accounts'),
+    path('accounts/repoll-all/', views_frontend.repoll_all_instance_role_accounts_view, name='repoll_all_accounts'),
 
     # Task status
     path('tasks/', views_frontend.task_status_view, name='task_status'),
