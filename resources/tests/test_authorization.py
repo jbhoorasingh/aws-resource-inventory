@@ -139,8 +139,8 @@ class AccountsPagePermissionTest(TestCase):
         self.client.login(username='privileged', password='testpass123')
         response = self.client.get(reverse('accounts'))
 
-        self.assertContains(response, 'Poll Single Account')
-        self.assertContains(response, 'Bulk Poll Accounts')
+        self.assertContains(response, 'Poll with Credentials')
+        self.assertContains(response, 'Bulk Poll')
         self.assertNotContains(response, 'Read-only access')
 
     def test_regular_user_sees_lock_icon_in_actions(self):

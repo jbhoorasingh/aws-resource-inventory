@@ -1,7 +1,7 @@
 """
 Tests for frontend views.
 """
-from django.test import TestCase, Client
+from django.test import TestCase, TransactionTestCase, Client
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
@@ -9,7 +9,7 @@ from django.utils import timezone
 from unittest.mock import patch, MagicMock
 from resources.models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule,
-    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance, UserProfile
+    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance, UserProfile, DiscoveryTask
 )
 
 
@@ -57,7 +57,7 @@ class AccountsViewTest(TestCase):
         self.assertEqual(len(response.context['accounts']), 2)
 
 
-class PollAccountViewTest(TestCase):
+class PollAccountViewTest(TransactionTestCase):
     """Tests for poll account view."""
 
     def setUp(self):
@@ -74,10 +74,10 @@ class PollAccountViewTest(TestCase):
         self.user.user_permissions.add(permission)
         self.client.login(username='testuser', password='testpass123')
 
-    @patch('resources.views_frontend.subprocess.run')
-    def test_poll_account_with_direct_credentials(self, mock_subprocess):
-        """Test polling account with direct credentials."""
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout='Success', stderr='')
+    @patch('resources.tasks.discover_account_resources.delay')
+    def test_poll_account_with_direct_credentials(self, mock_task):
+        """Test polling account with direct credentials queues Celery task."""
+        mock_task.return_value = MagicMock(id='test-task-id')
 
         response = self.client.post(self.url, {
             'account_number': '123456789012',
@@ -89,12 +89,18 @@ class PollAccountViewTest(TestCase):
         })
 
         self.assertEqual(response.status_code, 302)  # Redirect after success
-        mock_subprocess.assert_called_once()
+        # Verify DiscoveryTask was created
+        self.assertEqual(DiscoveryTask.objects.count(), 1)
+        task = DiscoveryTask.objects.first()
+        self.assertEqual(task.status, 'pending')
+        self.assertEqual(task.task_type, 'single')
+        # Verify Celery task was queued
+        mock_task.assert_called_once()
 
-    @patch('resources.views_frontend.subprocess.run')
-    def test_poll_account_with_role_assumption(self, mock_subprocess):
-        """Test polling account with role assumption."""
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout='Success', stderr='')
+    @patch('resources.tasks.discover_account_resources.delay')
+    def test_poll_account_with_role_assumption(self, mock_task):
+        """Test polling account with role assumption queues Celery task."""
+        mock_task.return_value = MagicMock(id='test-task-id')
 
         response = self.client.post(self.url, {
             'account_number': '123456789012',
@@ -108,7 +114,9 @@ class PollAccountViewTest(TestCase):
         })
 
         self.assertEqual(response.status_code, 302)
-        mock_subprocess.assert_called_once()
+        # Verify DiscoveryTask was created
+        self.assertEqual(DiscoveryTask.objects.count(), 1)
+        mock_task.assert_called_once()
 
     def test_poll_account_requires_post(self):
         """Test GET request is not allowed."""
