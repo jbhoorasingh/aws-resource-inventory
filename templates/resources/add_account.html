@@ -130,6 +130,20 @@
                     arn:aws:iam::<span class="text-purple-600">&lt;account_id&gt;</span>:role/<span class="text-blue-600" id="rolePreview">{{ default_role_name }}</span>
                 </code>
             </div>
+
+            <hr class="my-6 border-gray-200">
+
+            <!-- Auto-poll Option -->
+            <div class="p-4 bg-green-50 rounded-lg border border-green-200" id="autoPollSection">
+                <label class="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="auto_poll" id="auto_poll" checked
+                           class="form-checkbox text-green-600 focus:ring-green-500 rounded h-5 w-5">
+                    <span class="ml-3">
+                        <span class="text-sm font-medium text-green-800">Auto-poll accounts after adding</span>
+                        <p class="text-xs text-green-600 mt-0.5">Immediately discover resources using EC2 instance role authentication</p>
+                    </span>
+                </label>
+            </div>
         </div>
 
         <div class="bg-gray-50 px-6 py-4 flex justify-between rounded-b-lg">
@@ -150,6 +164,19 @@
 // Update role preview when role name changes
 document.getElementById('default_role_name').addEventListener('input', function(e) {
     document.getElementById('rolePreview').textContent = e.target.value || 'RoleName';
+});
+
+// Show/hide auto-poll section based on auth method
+document.querySelectorAll('input[name="auth_method"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        const autoPollSection = document.getElementById('autoPollSection');
+        if (this.value === 'instance_role') {
+            autoPollSection.classList.remove('hidden');
+        } else {
+            autoPollSection.classList.add('hidden');
+            document.getElementById('auto_poll').checked = false;
+        }
+    });
 });
 </script>
 {% endblock %}
