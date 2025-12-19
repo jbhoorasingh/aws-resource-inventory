@@ -25,6 +25,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+    - name: Create logs directory
+      run: mkdir -p logs
     - name: Run Tests
+      env:
+        SECRET_KEY: test-secret-key-for-ci
+        DEBUG: "True"
+        # No DATABASE_URL or POSTGRES_HOST - uses SQLite
       run: |
-        python manage.py test
+        python manage.py test --verbosity=2
