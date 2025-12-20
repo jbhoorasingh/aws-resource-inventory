@@ -187,6 +187,21 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max per task
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes soft limit
 
+# Scheduled Polling Configuration
+SCHEDULED_POLLING_ENABLED = config('SCHEDULED_POLLING_ENABLED', default=True, cast=bool)
+SCHEDULED_POLLING_MAX_CONCURRENT = config('SCHEDULED_POLLING_MAX_CONCURRENT', default=2, cast=int)
+SCHEDULED_POLLING_STAGGER_SECONDS = config('SCHEDULED_POLLING_STAGGER_SECONDS', default=30, cast=int)
+
+# Celery Beat Schedule
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'poll-instance-role-accounts-hourly': {
+        'task': 'resources.tasks.scheduled_poll_instance_role_accounts',
+        'schedule': crontab(minute=0),  # Run at the top of every hour
+    },
+}
+
 # Logging Configuration
 LOGGING = {
     'version': 1,
