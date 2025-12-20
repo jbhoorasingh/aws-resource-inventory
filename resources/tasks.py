@@ -3,6 +3,7 @@ Celery tasks for AWS resource discovery
 """
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 import logging
@@ -14,6 +15,127 @@ from .models import (
 from .services import AWSResourceDiscovery
 
 logger = logging.getLogger(__name__)
+
+
+def _delete_account_enis_and_ec2(account_id: str) -> dict:
+    """
+    Delete ENIs and EC2 instances for an account before re-discovery.
+
+    This is a safe deletion that only removes account-specific resources.
+    VPCs, Subnets, and Security Groups are NOT deleted here since they may be
+    shared across accounts (via VPC sharing/RAM).
+
+    Args:
+        account_id: The AWS account ID (12-digit string)
+
+    Returns:
+        Dictionary with counts of deleted resources
+    """
+    counts = {
+        'enis': 0,
+        'eni_secondary_ips': 0,
+        'eni_security_groups': 0,
+        'ec2_instances': 0,
+    }
+
+    # Get ENIs owned by this account
+    enis = ENI.objects.filter(owner_account=account_id)
+    eni_ids = list(enis.values_list('id', flat=True))
+
+    if eni_ids:
+        # Delete ENI secondary IPs
+        counts['eni_secondary_ips'] = ENISecondaryIP.objects.filter(
+            eni_id__in=eni_ids
+        ).delete()[0]
+
+        # Delete ENI-SecurityGroup relationships
+        counts['eni_security_groups'] = ENISecurityGroup.objects.filter(
+            eni_id__in=eni_ids
+        ).delete()[0]
+
+        # Delete ENIs
+        counts['enis'] = enis.delete()[0]
+
+    # Delete EC2 instances owned by this account
+    counts['ec2_instances'] = EC2Instance.objects.filter(
+        owner_account=account_id
+    ).delete()[0]
+
+    if any(counts.values()):
+        logger.info(
+            f"Deleted account resources for {account_id}: "
+            f"{counts['enis']} ENIs, {counts['ec2_instances']} EC2 Instances, "
+            f"{counts['eni_secondary_ips']} Secondary IPs, {counts['eni_security_groups']} ENI-SG links"
+        )
+    else:
+        logger.info(f"No ENIs or EC2 instances found for account {account_id}")
+
+    return counts
+
+
+def _cleanup_orphaned_vpcs(account_id: str, discovered_vpc_ids: set) -> dict:
+    """
+    Clean up orphaned VPCs that no longer exist in AWS.
+
+    Only deletes VPCs that:
+    1. Are owned by this account
+    2. Have no remaining ENIs or EC2 instances
+    3. Were NOT found in the current discovery (no longer exist in AWS)
+
+    Args:
+        account_id: The AWS account ID
+        discovered_vpc_ids: Set of VPC IDs found in the current AWS discovery
+
+    Returns:
+        Dictionary with counts of deleted resources
+    """
+    counts = {
+        'vpcs': 0,
+        'subnets': 0,
+        'security_groups': 0,
+        'security_group_rules': 0,
+    }
+
+    # Find VPCs owned by this account that weren't in the discovery results
+    orphaned_vpcs = VPC.objects.filter(
+        owner_account=account_id
+    ).exclude(
+        vpc_id__in=discovered_vpc_ids
+    )
+
+    for vpc in orphaned_vpcs:
+        # Check if VPC has any remaining ENIs or EC2 instances
+        has_enis = ENI.objects.filter(subnet__vpc=vpc).exists()
+        has_ec2 = EC2Instance.objects.filter(vpc=vpc).exists()
+
+        if not has_enis and not has_ec2:
+            # Safe to delete - VPC is orphaned and has no child resources
+            vpc_id = vpc.vpc_id
+
+            # Count related resources before deletion
+            subnet_count = Subnet.objects.filter(vpc=vpc).count()
+            sg_count = SecurityGroup.objects.filter(vpc=vpc).count()
+            rule_count = SecurityGroupRule.objects.filter(security_group__vpc=vpc).count()
+
+            # Delete VPC (cascades to subnets, security groups, rules)
+            vpc.delete()
+
+            counts['vpcs'] += 1
+            counts['subnets'] += subnet_count
+            counts['security_groups'] += sg_count
+            counts['security_group_rules'] += rule_count
+
+            logger.info(
+                f"Deleted orphaned VPC {vpc_id} (not in AWS, no remaining ENIs/EC2): "
+                f"{subnet_count} subnets, {sg_count} security groups"
+            )
+
+    if counts['vpcs']:
+        logger.info(
+            f"Cleaned up {counts['vpcs']} orphaned VPCs for account {account_id}"
+        )
+
+    return counts
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=60)
@@ -75,12 +197,23 @@ def discover_account_resources(
         # Discover all resources
         results = discovery.discover_all_resources(regions)
 
+        # Extract discovered VPC IDs for orphan cleanup
+        discovered_vpc_ids = set()
+        for region_data in results.get('regions', {}).values():
+            for vpc in region_data.get('vpcs', []):
+                discovered_vpc_ids.add(vpc['vpc_id'])
+
         # Save to database
         with transaction.atomic():
             account = _get_or_create_account(
                 account_number, account_name, role_arn, external_id
             )
+            # Delete existing ENIs and EC2 instances before saving new ones
+            # (VPCs, Subnets, SGs are kept as they may be shared)
+            _delete_account_enis_and_ec2(account_number)
             _save_resources(account, results)
+            # Clean up orphaned VPCs that no longer exist in AWS
+            _cleanup_orphaned_vpcs(account_number, discovered_vpc_ids)
 
         # Update task record with success
         task_record.status = 'success'
@@ -337,9 +470,20 @@ def repoll_account_with_instance_role(
         # Discover all resources
         results = discovery.discover_all_resources(regions)
 
+        # Extract discovered VPC IDs for orphan cleanup
+        discovered_vpc_ids = set()
+        for region_data in results.get('regions', {}).values():
+            for vpc in region_data.get('vpcs', []):
+                discovered_vpc_ids.add(vpc['vpc_id'])
+
         # Save to database
         with transaction.atomic():
+            # Delete existing ENIs and EC2 instances before saving new ones
+            # (VPCs, Subnets, SGs are kept as they may be shared)
+            _delete_account_enis_and_ec2(account.account_id)
             _save_resources(account, results)
+            # Clean up orphaned VPCs that no longer exist in AWS
+            _cleanup_orphaned_vpcs(account.account_id, discovered_vpc_ids)
             account.last_polled = timezone.now()
             account.save(update_fields=['last_polled'])
 
@@ -613,3 +757,109 @@ def _save_resources(account: AWSAccount, results: dict):
 
             except Subnet.DoesNotExist:
                 logger.warning(f'Subnet {eni_data["subnet_id"]} not found for ENI {eni_data["eni_id"]}')
+
+
+@shared_task(bind=True)
+def scheduled_poll_instance_role_accounts(self):
+    """
+    Scheduled task to poll all accounts with instance_role auth method.
+
+    This task runs hourly via Celery Beat and:
+    - Gets all active accounts configured for instance role authentication
+    - Creates a parent DiscoveryTask to track overall progress
+    - Queues child tasks for each account with staggered countdowns for rate limiting
+
+    Rate limiting is controlled by settings:
+    - SCHEDULED_POLLING_ENABLED: Toggle scheduled polling on/off
+    - SCHEDULED_POLLING_MAX_CONCURRENT: Maximum concurrent polls
+    - SCHEDULED_POLLING_STAGGER_SECONDS: Seconds between poll starts
+    """
+    # Check if scheduled polling is enabled
+    if not getattr(settings, 'SCHEDULED_POLLING_ENABLED', True):
+        logger.info("Scheduled polling is disabled")
+        return {'status': 'disabled', 'message': 'Scheduled polling is disabled'}
+
+    # Get all accounts that can be re-polled with instance role
+    accounts = AWSAccount.objects.filter(
+        auth_method='instance_role',
+        is_active=True,
+    ).exclude(
+        default_regions=[]
+    ).exclude(
+        default_role_name=''
+    )
+
+    if not accounts.exists():
+        logger.info("No accounts configured for scheduled instance role polling")
+        return {'status': 'skipped', 'message': 'No eligible accounts'}
+
+    # Get rate limiting configuration
+    max_concurrent = getattr(settings, 'SCHEDULED_POLLING_MAX_CONCURRENT', 2)
+    stagger_seconds = getattr(settings, 'SCHEDULED_POLLING_STAGGER_SECONDS', 30)
+
+    account_list = list(accounts)
+    total_accounts = len(account_list)
+
+    logger.info(
+        f"Starting scheduled poll for {total_accounts} accounts "
+        f"(max_concurrent={max_concurrent}, stagger={stagger_seconds}s)"
+    )
+
+    # Create parent task record for tracking
+    parent_task = DiscoveryTask.objects.create(
+        task_type='bulk',
+        status='running',
+        regions=[],  # Will vary per account
+        total_accounts=total_accounts,
+        # Note: No initiated_by since this is automated
+    )
+    parent_task.task_id = self.request.id
+    parent_task.started_at = timezone.now()
+    parent_task.save(update_fields=['task_id', 'started_at'])
+
+    # Queue child tasks with staggered countdowns for rate limiting
+    queued_count = 0
+    child_task_ids = []
+
+    for i, account in enumerate(account_list):
+        # Create child task record
+        child_task = DiscoveryTask.objects.create(
+            task_type='single',
+            status='pending',
+            account=account,
+            regions=account.default_regions,
+            parent_task=parent_task,
+            total_accounts=1
+        )
+
+        # Calculate countdown for staggering
+        # batch_number * batch_size * stagger + position_in_batch * stagger
+        batch_number = i // max_concurrent
+        position_in_batch = i % max_concurrent
+        countdown = (batch_number * max_concurrent + position_in_batch) * stagger_seconds
+
+        # Queue the task with countdown for rate limiting
+        repoll_account_with_instance_role.apply_async(
+            kwargs={
+                'task_record_id': child_task.id,
+                'account_id': account.id
+            },
+            countdown=countdown
+        )
+
+        queued_count += 1
+        child_task_ids.append(child_task.id)
+        logger.info(
+            f"Queued scheduled poll for account {account.account_id} "
+            f"(countdown={countdown}s)"
+        )
+
+    logger.info(f"Scheduled poll queued {queued_count} account tasks")
+
+    return {
+        'status': 'started',
+        'total_accounts': total_accounts,
+        'queued': queued_count,
+        'parent_task_id': parent_task.id,
+        'child_task_ids': child_task_ids
+    }
