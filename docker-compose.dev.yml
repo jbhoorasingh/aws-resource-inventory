@@ -108,6 +108,41 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Celery Beat Scheduler (Development)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: aws-inventory-dev-celery-beat
+    command: celery -A aws_inventory beat -l INFO
+    env_file: .env
+    environment:
+      # Docker-specific overrides
+      DJANGO_SETTINGS_MODULE: aws_inventory.settings
+      DEBUG: "True"
+      # Database - use Docker service name
+      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
+      POSTGRES_HOST: db
+      # Celery - use Docker service name
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Scheduled polling settings
+      SCHEDULED_POLLING_ENABLED: ${SCHEDULED_POLLING_ENABLED:-true}
+      SCHEDULED_POLLING_MAX_CONCURRENT: ${SCHEDULED_POLLING_MAX_CONCURRENT:-2}
+      SCHEDULED_POLLING_STAGGER_SECONDS: ${SCHEDULED_POLLING_STAGGER_SECONDS:-30}
+    volumes:
+      - .:/app
+      - /app/.venv  # Exclude venv from mount
+    networks:
+      - aws-inventory-dev-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_dev_data:
     driver: local
