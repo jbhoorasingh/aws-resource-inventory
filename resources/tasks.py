@@ -423,6 +423,7 @@ def repoll_account_with_instance_role(
     The instance role is used to assume the target account's discovery role.
     """
     task_record = DiscoveryTask.objects.get(id=task_record_id)
+    parent_task_id = task_record.parent_task_id
 
     try:
         # Get the account
@@ -495,6 +496,9 @@ def repoll_account_with_instance_role(
             'status', 'completed_at', 'result_summary'
         ])
 
+        if parent_task_id:
+            _update_parent_task_progress(parent_task_id)
+
         logger.info(f"Successfully completed instance role discovery for account {account.account_id}")
 
         return {
@@ -508,6 +512,10 @@ def repoll_account_with_instance_role(
         task_record.completed_at = timezone.now()
         task_record.error_message = 'Task exceeded time limit'
         task_record.save(update_fields=['status', 'completed_at', 'error_message'])
+
+        if parent_task_id:
+            _update_parent_task_progress(parent_task_id)
+
         raise
 
     except Exception as e:
@@ -517,6 +525,9 @@ def repoll_account_with_instance_role(
         task_record.completed_at = timezone.now()
         task_record.error_message = str(e)
         task_record.save(update_fields=['status', 'completed_at', 'error_message'])
+
+        if parent_task_id:
+            _update_parent_task_progress(parent_task_id)
 
         # Optionally retry
         if self.request.retries < self.max_retries:
