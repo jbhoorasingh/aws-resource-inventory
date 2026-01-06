@@ -2,6 +2,7 @@
 Tests for Celery tasks including resource cleanup and scheduled polling.
 """
 from unittest.mock import patch, MagicMock
+from celery.exceptions import SoftTimeLimitExceeded
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from resources.models import (
@@ -11,6 +12,7 @@ from resources.models import (
 from resources.tasks import (
     _delete_account_enis_and_ec2,
     _cleanup_orphaned_vpcs,
+    repoll_account_with_instance_role,
     scheduled_poll_instance_role_accounts,
 )
 
@@ -466,3 +468,85 @@ class ScheduledPollInstanceRoleAccountsTest(TestCase):
         calls = mock_apply_async.call_args_list
         countdowns = sorted([call[1]['countdown'] for call in calls])
         self.assertEqual(countdowns, [0, 60])
+
+
+class RepollAccountTaskProgressTest(TestCase):
+    """Ensure parent tasks are updated when repoll child tasks finish."""
+
+    def setUp(self):
+        self.account = AWSAccount.objects.create(
+            account_id='123456789012',
+            account_name='Instance Role Account',
+            auth_method='instance_role',
+            default_role_name='TestRole',
+            default_regions=['us-east-1'],
+            is_active=True
+        )
+        self.parent_task = DiscoveryTask.objects.create(
+            task_type='bulk',
+            status='running',
+            total_accounts=1
+        )
+        self.child_task = DiscoveryTask.objects.create(
+            task_type='single',
+            status='pending',
+            account=self.account,
+            regions=['us-east-1'],
+            parent_task=self.parent_task,
+            total_accounts=1
+        )
+
+    def _mock_discovery(self, mock_discovery):
+        discovery_instance = MagicMock()
+        mock_discovery.return_value = discovery_instance
+        discovery_instance.get_account_id.return_value = self.account.account_id
+        return discovery_instance
+
+    @patch('resources.tasks.AWSResourceDiscovery')
+    def test_repoll_updates_parent_progress_on_success(self, mock_discovery):
+        discovery_instance = self._mock_discovery(mock_discovery)
+        discovery_instance.discover_all_resources.return_value = {
+            'summary': {'accounts': 1},
+            'regions': {
+                'us-east-1': {
+                    'vpcs': [],
+                    'subnets': [],
+                    'security_groups': [],
+                    'enis': []
+                }
+            }
+        }
+
+        result = repoll_account_with_instance_role.apply(
+            kwargs={
+                'task_record_id': self.child_task.id,
+                'account_id': self.account.id
+            },
+            throw=True
+        ).get()
+
+        self.assertEqual(result['status'], 'success')
+        self.parent_task.refresh_from_db()
+        self.assertEqual(self.parent_task.completed_accounts, 1)
+        self.assertEqual(self.parent_task.failed_accounts, 0)
+        self.assertEqual(self.parent_task.status, 'success')
+        self.assertIsNotNone(self.parent_task.completed_at)
+
+    @patch('resources.tasks.AWSResourceDiscovery')
+    def test_repoll_failure_updates_parent_progress(self, mock_discovery):
+        discovery_instance = self._mock_discovery(mock_discovery)
+        discovery_instance.discover_all_resources.side_effect = SoftTimeLimitExceeded()
+
+        with self.assertRaises(SoftTimeLimitExceeded):
+            repoll_account_with_instance_role.apply(
+                kwargs={
+                    'task_record_id': self.child_task.id,
+                    'account_id': self.account.id
+                },
+                throw=True
+            ).get()
+
+        self.parent_task.refresh_from_db()
+        self.assertEqual(self.parent_task.completed_accounts, 0)
+        self.assertEqual(self.parent_task.failed_accounts, 1)
+        self.assertEqual(self.parent_task.status, 'failed')
