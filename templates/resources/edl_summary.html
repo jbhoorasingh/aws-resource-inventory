@@ -267,6 +267,10 @@
                                 class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
                             <i class="fas fa-copy"></i> Copy
                         </button>
+                        <button onclick="previewFilter()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2">
+                            <i class="fas fa-search"></i> Preview
+                        </button>
                         <a href="#"
                            id="viewGeneratedUrl"
                            target="_blank"
@@ -275,6 +279,29 @@
                         </a>
                     </div>
                     <small class="text-gray-500 mt-1 block">Tags will be added as query parameters</small>
+
+                    <!-- Preview Results -->
+                    <div id="previewResults" class="mt-4 hidden">
+                        <div id="previewLoading" class="text-gray-500 hidden">
+                            <i class="fas fa-spinner fa-spin mr-2"></i> Loading preview...
+                        </div>
+                        <div id="previewContent" class="bg-gray-50 p-4 rounded-lg hidden">
+                            <div class="flex items-center gap-4">
+                                <div>
+                                    <span class="text-2xl font-bold text-gray-900" id="previewEniCount">0</span>
+                                    <span class="text-gray-600">ENIs</span>
+                                </div>
+                                <div>
+                                    <span class="text-2xl font-bold text-gray-900" id="previewIpCount">0</span>
+                                    <span class="text-gray-600">Total IPs</span>
+                                </div>
+                            </div>
+                            <div id="previewFilters" class="mt-2 text-sm text-gray-500"></div>
+                        </div>
+                        <div id="previewError" class="bg-red-50 border-l-4 border-red-500 p-4 hidden">
+                            <span class="text-red-700" id="previewErrorMsg"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="bg-gray-50 p-4 rounded-lg">
@@ -449,6 +476,64 @@ function updateGeneratedUrl() {
     const generatedUrl = baseUrl + '?' + params.join('&');
     document.getElementById('generatedUrl').value = generatedUrl;
     document.getElementById('viewGeneratedUrl').href = generatedUrl;
+}
+
+// Preview filter results
+function previewFilter() {
+    const previewResults = document.getElementById('previewResults');
+    const previewLoading = document.getElementById('previewLoading');
+    const previewContent = document.getElementById('previewContent');
+    const previewError = document.getElementById('previewError');
+
+    // Show loading
+    previewResults.classList.remove('hidden');
+    previewLoading.classList.remove('hidden');
+    previewContent.classList.add('hidden');
+    previewError.classList.add('hidden');
+
+    // Build query params for JSON endpoint
+    const params = [];
+    document.querySelectorAll('.tag-filter-row').forEach(row => {
+        const key = row.querySelector('.tag-key').value.trim();
+        const value = row.querySelector('.tag-value').value.trim();
+        if (key && value) {
+            params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+    });
+
+    const queryString = params.length > 0 ? '?' + params.join('&') : '';
+    const jsonUrl = '/edl/enis/json/' + queryString;
+
+    fetch(jsonUrl)
+        .then(response => response.json())
+        .then(data => {
+            previewLoading.classList.add('hidden');
+
+            if (data.error) {
+                previewError.classList.remove('hidden');
+                document.getElementById('previewErrorMsg').textContent = data.error;
+            } else {
+                previewContent.classList.remove('hidden');
+                document.getElementById('previewEniCount').textContent = data.eni_count || 0;
+                document.getElementById('previewIpCount').textContent = data.total_ips || 0;
+
+                // Show active filters
+                const filtersDiv = document.getElementById('previewFilters');
+                if (data.filters && Object.keys(data.filters).length > 0) {
+                    const filtersList = Object.entries(data.filters)
+                        .map(([k, v]) => `<code class="bg-white px-2 py-1 rounded text-xs">${k}=${v}</code>`)
+                        .join(' ');
+                    filtersDiv.innerHTML = `<strong>Active filters:</strong> ${filtersList}`;
+                } else {
+                    filtersDiv.innerHTML = '<strong>No filters applied</strong> (showing all ENIs)';
+                }
+            }
+        })
+        .catch(error => {
+            previewLoading.classList.add('hidden');
+            previewError.classList.remove('hidden');
+            document.getElementById('previewErrorMsg').textContent = 'Failed to fetch preview: ' + error.message;
+        });
 }
 
 // Initialize tag filter listeners on page load
