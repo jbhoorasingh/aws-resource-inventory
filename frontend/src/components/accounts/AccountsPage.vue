@@ -103,11 +103,13 @@
       :columns="columns"
       :items="accounts"
       :loading="loading"
-      :searchable="false"
-      :total-count="accounts.length"
+      :searchable="true"
+      search-placeholder="Search accounts..."
+      :total-count="totalCount"
       :show-count="true"
       empty-message="No accounts yet. Get started by polling your AWS accounts to discover and track resources."
       empty-icon="cloud"
+      @search="handleSearch"
     >
       <template #cell-account="{ item }">
         <div class="flex flex-col">
@@ -207,6 +209,16 @@
       </template>
     </DataTable>
 
+    <!-- Pagination -->
+    <Pagination
+      v-if="totalCount > pageSize"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :total-items="totalCount"
+      :items-per-page="pageSize"
+      @page-change="handlePageChange"
+    />
+
     <!-- Empty state actions -->
     <div v-if="!loading && accounts.length === 0 && canPoll" class="mt-6 flex gap-3 justify-center">
       <button
@@ -265,6 +277,7 @@ import type { Column } from '@/components/common/DataTable.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import SummaryCard from '@/components/common/SummaryCard.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import PollModal from './PollModal.vue'
 import BulkPollModal from './BulkPollModal.vue'
 
@@ -277,6 +290,10 @@ defineProps<{
 const accounts = ref<AWSAccount[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const totalCount = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(50)
+const searchQuery = ref('')
 const successMessage = ref<string | null>(null)
 const showPollModal = ref(false)
 const showBulkPollModal = ref(false)
@@ -288,6 +305,7 @@ const repollingAccounts = ref<Set<string>>(new Set())
 const activeCount = computed(() => accounts.value.filter(a => a.is_active).length)
 const instanceRoleCount = computed(() => accounts.value.filter(a => a.auth_method === 'instance_role').length)
 const totalENIs = computed(() => accounts.value.reduce((sum, a) => sum + a.eni_count, 0))
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value))
 
 // Table columns
 const columns: Column[] = [
@@ -305,14 +323,33 @@ async function fetchAccounts() {
   loading.value = true
   error.value = null
   try {
-    const response = await accountsApi.list()
+    const filters: Record<string, string | number> = {
+      page: currentPage.value,
+    }
+    if (searchQuery.value) {
+      filters.search = searchQuery.value
+    }
+    const response = await accountsApi.list(filters as any)
     accounts.value = response.results
+    totalCount.value = response.count
   } catch (e: any) {
     console.error('Failed to fetch accounts:', e)
     error.value = e.response?.data?.detail || e.message || 'Failed to fetch accounts'
   } finally {
     loading.value = false
   }
+}
+
+// Handlers
+function handleSearch(query: string) {
+  searchQuery.value = query
+  currentPage.value = 1
+  fetchAccounts()
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchAccounts()
 }
 
 // Handle repoll all

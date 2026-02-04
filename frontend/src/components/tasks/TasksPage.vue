@@ -90,13 +90,28 @@
       </div>
     </div>
 
-    <!-- Polling indicator -->
-    <div
-      v-if="isPolling"
-      class="mb-4 flex items-center text-sm text-blue-600"
-    >
-      <ArrowPathIcon class="w-4 h-4 mr-2 animate-spin" />
-      Auto-refreshing every 5 seconds...
+    <!-- Auto-refresh control -->
+    <div class="mb-4 flex items-center justify-between">
+      <div v-if="isPolling && !autoRefreshDisabled" class="flex items-center text-sm text-blue-600">
+        <ArrowPathIcon class="w-4 h-4 mr-2 animate-spin" />
+        Auto-refreshing every 5 seconds...
+      </div>
+      <div v-else class="text-sm text-gray-500">
+        {{ autoRefreshDisabled ? 'Auto-refresh disabled' : 'Auto-refresh paused (no active tasks)' }}
+      </div>
+      <button
+        @click="toggleAutoRefresh"
+        :class="[
+          'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+          autoRefreshDisabled
+            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        ]"
+      >
+        <ArrowPathIcon v-if="!autoRefreshDisabled" class="w-4 h-4" />
+        <PauseIcon v-else class="w-4 h-4" />
+        {{ autoRefreshDisabled ? 'Enable Auto-refresh' : 'Disable Auto-refresh' }}
+      </button>
     </div>
 
     <!-- Tasks Table -->
@@ -177,6 +192,7 @@ import {
   PlusIcon,
   EyeIcon,
   ArrowPathIcon,
+  PauseIcon,
 } from '@heroicons/vue/24/outline'
 import { tasksApi } from '@/api/tasks'
 import { useFilters } from '@/composables/useFilters'
@@ -203,6 +219,7 @@ const summary = ref<TaskSummary>({
   cancelled: 0,
 })
 const loading = ref(false)
+const autoRefreshDisabled = ref(false)
 
 // Filter state
 interface TaskFilterState {
@@ -280,12 +297,17 @@ async function fetchTasks() {
   }
 }
 
-// Polling - refresh every 5 seconds if there are pending/running tasks
+// Polling - refresh every 5 seconds if there are pending/running tasks and auto-refresh is enabled
 const shouldPoll = computed(
-  () => summary.value.pending > 0 || summary.value.running > 0
+  () => !autoRefreshDisabled.value && (summary.value.pending > 0 || summary.value.running > 0)
 )
 
 const { isPolling } = useConditionalPolling(fetchTasks, shouldPoll, 5000)
+
+// Toggle auto-refresh
+function toggleAutoRefresh() {
+  autoRefreshDisabled.value = !autoRefreshDisabled.value
+}
 
 // Utilities
 function formatTimeAgo(date: string): string {

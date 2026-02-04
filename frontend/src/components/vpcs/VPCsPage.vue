@@ -61,6 +61,38 @@
       />
     </div>
 
+    <!-- Search Box -->
+    <div class="mb-4 bg-white shadow rounded-lg p-4">
+      <div class="flex items-center gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Search VPCs</label>
+          <div class="relative">
+            <MagnifyingGlassIcon class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search by VPC ID, CIDR block (e.g., 10.0.0.0/16), or account..."
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+        </div>
+        <button
+          @click="handleSearch"
+          class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          Search
+        </button>
+        <button
+          v-if="searchQuery"
+          @click="clearSearch"
+          class="mt-6 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+
     <!-- Filters -->
     <FilterBar
       :active-filter-count="activeFilterCount"
@@ -153,6 +185,7 @@ import {
   MinusCircleIcon,
   ExclamationTriangleIcon,
   UserGroupIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/vue/24/outline'
 import { vpcsApi } from '@/api/vpcs'
 import { useFilters } from '@/composables/useFilters'
@@ -169,6 +202,7 @@ const vpcs = ref<VPCWithResources[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const expandedVpcs = ref<Set<number>>(new Set())
+const searchQuery = ref('')
 
 const summary = ref({
   vpcs: 0,
@@ -233,6 +267,9 @@ async function fetchVPCs() {
     if (filters.state) {
       apiFilters.state = String(filters.state.value)
     }
+    if (searchQuery.value) {
+      apiFilters.search = searchQuery.value
+    }
 
     const data = await vpcsApi.getTree(apiFilters as any)
     vpcs.value = data
@@ -263,6 +300,16 @@ async function fetchVPCs() {
   } finally {
     loading.value = false
   }
+}
+
+// Search handlers
+function handleSearch() {
+  fetchVPCs()
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  fetchVPCs()
 }
 
 // Tree controls

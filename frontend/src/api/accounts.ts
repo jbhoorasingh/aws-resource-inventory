@@ -6,6 +6,7 @@ export interface AccountsFilters {
   is_active?: boolean
   search?: string
   ordering?: string
+  page?: number
 }
 
 export const accountsApi = {

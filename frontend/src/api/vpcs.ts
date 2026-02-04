@@ -20,6 +20,7 @@ export const vpcsApi = {
       region: filters.region,
       owner_account: filters.account,
       state: filters.state,
+      search: filters.search,
     })
     const response = await apiClient.getPaginated<VPCWithResources>(`/vpcs/tree/${queryString}`)
     return response.results
