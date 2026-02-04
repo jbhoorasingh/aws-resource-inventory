@@ -79,8 +79,11 @@ def _cleanup_orphaned_vpcs(account_id: str, discovered_vpc_ids: set) -> dict:
 
     Only deletes VPCs that:
     1. Are owned by this account
-    2. Have no remaining ENIs or EC2 instances
+    2. Have no remaining ENIs or EC2 instances FROM ANY ACCOUNT
     3. Were NOT found in the current discovery (no longer exist in AWS)
+
+    This function runs OUTSIDE the main transaction to avoid deadlocks
+    with concurrent polling of accounts that share VPCs.
 
     Args:
         account_id: The AWS account ID
@@ -104,31 +107,53 @@ def _cleanup_orphaned_vpcs(account_id: str, discovered_vpc_ids: set) -> dict:
     )
 
     for vpc in orphaned_vpcs:
-        # Check if VPC has any remaining ENIs or EC2 instances
-        has_enis = ENI.objects.filter(subnet__vpc=vpc).exists()
-        has_ec2 = EC2Instance.objects.filter(vpc=vpc).exists()
+        # Use a separate transaction for each VPC to avoid long locks
+        try:
+            with transaction.atomic():
+                # Lock the VPC row to prevent concurrent modifications
+                vpc_locked = VPC.objects.select_for_update(nowait=True).get(pk=vpc.pk)
 
-        if not has_enis and not has_ec2:
-            # Safe to delete - VPC is orphaned and has no child resources
-            vpc_id = vpc.vpc_id
+                # Check if VPC has any remaining ENIs from ANY account
+                # Note: ENIs with subnet=NULL (orphaned) are not counted
+                has_enis = ENI.objects.filter(subnet__vpc=vpc_locked).exists()
 
-            # Count related resources before deletion
-            subnet_count = Subnet.objects.filter(vpc=vpc).count()
-            sg_count = SecurityGroup.objects.filter(vpc=vpc).count()
-            rule_count = SecurityGroupRule.objects.filter(security_group__vpc=vpc).count()
+                # Check if VPC has any EC2 instances from ANY account
+                has_ec2 = EC2Instance.objects.filter(vpc=vpc_locked).exists()
 
-            # Delete VPC (cascades to subnets, security groups, rules)
-            vpc.delete()
+                if not has_enis and not has_ec2:
+                    # Safe to delete - VPC is orphaned and has no child resources
+                    vpc_id = vpc_locked.vpc_id
 
-            counts['vpcs'] += 1
-            counts['subnets'] += subnet_count
-            counts['security_groups'] += sg_count
-            counts['security_group_rules'] += rule_count
+                    # Count related resources before deletion
+                    subnet_count = Subnet.objects.filter(vpc=vpc_locked).count()
+                    sg_count = SecurityGroup.objects.filter(vpc=vpc_locked).count()
+                    rule_count = SecurityGroupRule.objects.filter(security_group__vpc=vpc_locked).count()
 
-            logger.info(
-                f"Deleted orphaned VPC {vpc_id} (not in AWS, no remaining ENIs/EC2): "
-                f"{subnet_count} subnets, {sg_count} security groups"
-            )
+                    # Delete VPC (cascades to subnets, security groups, rules)
+                    vpc_locked.delete()
+
+                    counts['vpcs'] += 1
+                    counts['subnets'] += subnet_count
+                    counts['security_groups'] += sg_count
+                    counts['security_group_rules'] += rule_count
+
+                    logger.info(
+                        f"Deleted orphaned VPC {vpc_id} (not in AWS, no remaining ENIs/EC2): "
+                        f"{subnet_count} subnets, {sg_count} security groups"
+                    )
+                else:
+                    logger.debug(
+                        f"VPC {vpc_locked.vpc_id} not deleted - still has resources "
+                        f"(ENIs: {has_enis}, EC2: {has_ec2})"
+                    )
+
+        except VPC.DoesNotExist:
+            # VPC was already deleted by another process
+            logger.debug(f"VPC {vpc.vpc_id} already deleted")
+        except Exception as e:
+            # Could not lock VPC (another transaction has it) - skip for now
+            logger.debug(f"Could not lock VPC {vpc.vpc_id} for cleanup: {e}")
+            continue
 
     if counts['vpcs']:
         logger.info(
@@ -212,8 +237,10 @@ def discover_account_resources(
             # (VPCs, Subnets, SGs are kept as they may be shared)
             _delete_account_enis_and_ec2(account_number)
             _save_resources(account, results)
-            # Clean up orphaned VPCs that no longer exist in AWS
-            _cleanup_orphaned_vpcs(account_number, discovered_vpc_ids)
+
+        # Clean up orphaned VPCs OUTSIDE the main transaction to avoid deadlocks
+        # This runs in separate mini-transactions per VPC
+        _cleanup_orphaned_vpcs(account_number, discovered_vpc_ids)
 
         # Update task record with success
         task_record.status = 'success'
@@ -506,10 +533,11 @@ def repoll_account_with_instance_role(
             # (VPCs, Subnets, SGs are kept as they may be shared)
             _delete_account_enis_and_ec2(account.account_id)
             _save_resources(account, results)
-            # Clean up orphaned VPCs that no longer exist in AWS
-            _cleanup_orphaned_vpcs(account.account_id, discovered_vpc_ids)
             account.last_polled = timezone.now()
             account.save(update_fields=['last_polled'])
+
+        # Clean up orphaned VPCs OUTSIDE the main transaction to avoid deadlocks
+        _cleanup_orphaned_vpcs(account.account_id, discovered_vpc_ids)
 
         # Update task record with success
         task_record.status = 'success'

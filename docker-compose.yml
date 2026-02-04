@@ -109,8 +109,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: aws-inventory-celery
-    command: celery -A aws_inventory worker -l INFO --concurrency=4
+    # container_name: aws-inventory-celery
+    command: celery -A aws_inventory worker -l INFO --concurrency=${CELERY_WORKER_CONCURRENCY:-20}
     environment:
       # Django settings
       DJANGO_SETTINGS_MODULE: aws_inventory.settings
@@ -174,8 +174,8 @@ services:
 
       # Scheduled polling settings
       SCHEDULED_POLLING_ENABLED: ${SCHEDULED_POLLING_ENABLED:-true}
-      SCHEDULED_POLLING_MAX_CONCURRENT: ${SCHEDULED_POLLING_MAX_CONCURRENT:-2}
-      SCHEDULED_POLLING_STAGGER_SECONDS: ${SCHEDULED_POLLING_STAGGER_SECONDS:-30}
+      SCHEDULED_POLLING_MAX_CONCURRENT: ${SCHEDULED_POLLING_MAX_CONCURRENT:-20}
+      SCHEDULED_POLLING_STAGGER_SECONDS: ${SCHEDULED_POLLING_STAGGER_SECONDS:-1}
     volumes:
       - logs_volume:/app/logs
     networks:

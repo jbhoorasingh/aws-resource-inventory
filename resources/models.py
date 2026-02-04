@@ -220,8 +220,8 @@ class SecurityGroupRule(models.Model):
 class EC2Instance(models.Model):
     """EC2 Instance information"""
     instance_id = models.CharField(max_length=19, unique=True, help_text="EC2 Instance ID")
-    vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='instances')
-    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='instances')
+    vpc = models.ForeignKey(VPC, on_delete=models.SET_NULL, null=True, related_name='instances')
+    subnet = models.ForeignKey(Subnet, on_delete=models.SET_NULL, null=True, related_name='instances')
     name = models.CharField(max_length=255, blank=True, help_text="Instance name tag")
     instance_type = models.CharField(max_length=50, help_text="Instance type (e.g., t2.micro, m5.large)")
     state = models.CharField(max_length=20, help_text="Instance state (running, stopped, etc.)")
