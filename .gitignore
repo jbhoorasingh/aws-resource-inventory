@@ -41,3 +41,11 @@ logs/*.log
 docker-compose.override.yml
 ssl/
 staticfiles/
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db

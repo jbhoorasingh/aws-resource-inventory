@@ -9,9 +9,30 @@ from .models import (
 
 
 class AWSAccountSerializer(serializers.ModelSerializer):
+    eni_count = serializers.SerializerMethodField()
+    auth_method = serializers.SerializerMethodField()
+    can_repoll = serializers.SerializerMethodField()
+
     class Meta:
         model = AWSAccount
-        fields = ['id', 'account_id', 'account_name', 'is_active', 'last_polled', 'created_at', 'updated_at']
+        fields = [
+            'id', 'account_id', 'account_name', 'is_active', 'role_arn',
+            'external_id', 'last_polled', 'created_at', 'updated_at',
+            'eni_count', 'auth_method', 'can_repoll'
+        ]
+
+    def get_eni_count(self, obj):
+        return ENI.objects.filter(owner_account=obj.account_id).count()
+
+    def get_auth_method(self, obj):
+        # Check if account uses instance role (has role_arn but stored for re-polling)
+        if obj.role_arn:
+            return 'instance_role'
+        return 'credentials'
+
+    def get_can_repoll(self, obj):
+        # Can re-poll if it has role_arn configured
+        return bool(obj.role_arn)
 
 
 class VPCSerializer(serializers.ModelSerializer):

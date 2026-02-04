@@ -143,6 +143,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Flower - Celery Monitoring (Development)
+  flower:
+    image: mher/flower:2.0
+    container_name: aws-inventory-dev-flower
+    command: celery --broker=redis://redis:6379/0 flower --port=5555
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-flowerpassword}
+    ports:
+      - "5555:5555"
+    networks:
+      - aws-inventory-dev-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_dev_data:
     driver: local

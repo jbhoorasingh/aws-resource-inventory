@@ -21,25 +21,11 @@ logger = logging.getLogger(__name__)
 @login_required
 def accounts_view(request):
     """Display accounts page with polling functionality"""
-    # Since we removed the account->vpc relationship, we need to count ENIs differently
-    # We'll count ENIs by matching the account_id with the owner_account field
-    accounts = AWSAccount.objects.all().order_by('-last_polled', 'account_id')
-    
-    # Get ENI counts for all accounts in a single query
-    from django.db.models import Count
-    eni_counts = ENI.objects.values('owner_account').annotate(
-        count=Count('id')
-    ).values_list('owner_account', 'count')
-    
-    # Create a dictionary for quick lookup
-    eni_count_dict = dict(eni_counts)
-    
-    # Add ENI count for each account
-    for account in accounts:
-        account.eni_count = eni_count_dict.get(account.account_id, 0)
-    
+    # Check if user can poll accounts
+    can_poll = request.user.has_perm('resources.can_poll_accounts') or request.user.is_superuser
+
     context = {
-        'accounts': accounts,
+        'can_poll': can_poll,
     }
     return render(request, 'resources/accounts.html', context)
 

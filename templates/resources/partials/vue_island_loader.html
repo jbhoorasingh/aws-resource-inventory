@@ -1,0 +1,15 @@
+{% load vue_tags %}
+
+{# Vue island mount point with loading state #}
+<div id="{{ element_id }}"
+     data-props='{% vue_props props %}'
+     data-csrf-token="{{ csrf_token }}">
+    {# Loading state shown while Vue mounts #}
+    <div class="flex justify-center items-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-aws-orange"></div>
+        <span class="ml-3 text-gray-600">Loading...</span>
+    </div>
+</div>
+
+{# Load Vue island script #}
+{% vue_island island_name %}

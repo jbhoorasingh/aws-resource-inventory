@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.utils.html import format_html
 from .models import (
     UserProfile, AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
-    ENISecondaryIP, ENISecurityGroup
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
 )
 
 
@@ -252,6 +252,112 @@ class ENISecurityGroupAdmin(admin.ModelAdmin):
     list_filter = ['created_at']
     search_fields = ['eni__eni_id', 'security_group__name']
     raw_id_fields = ['eni', 'security_group']
+
+
+class ChildTaskInline(admin.TabularInline):
+    model = DiscoveryTask
+    fk_name = 'parent_task'
+    extra = 0
+    readonly_fields = ['task_id', 'task_type', 'status', 'account', 'started_at', 'completed_at', 'error_message']
+    fields = ['task_id', 'task_type', 'status', 'account', 'started_at', 'completed_at', 'error_message']
+    can_delete = False
+    verbose_name = 'Child Task'
+    verbose_name_plural = 'Child Tasks'
+    show_change_link = True
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DiscoveryTask)
+class DiscoveryTaskAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'task_type', 'status_badge', 'account_info', 'initiated_by',
+        'progress_info', 'duration_display', 'created_at'
+    ]
+    list_filter = ['status', 'task_type', 'created_at', 'initiated_by']
+    search_fields = ['task_id', 'account__account_id', 'account__account_name', 'initiated_by__username']
+    readonly_fields = [
+        'task_id', 'created_at', 'started_at', 'completed_at',
+        'result_summary', 'error_message', 'duration_display', 'progress_info'
+    ]
+    raw_id_fields = ['account', 'initiated_by', 'parent_task']
+    ordering = ['-created_at']
+    date_hierarchy = 'created_at'
+    inlines = [ChildTaskInline]
+
+    fieldsets = (
+        ('Task Information', {
+            'fields': ('task_id', 'task_type', 'status', 'account', 'regions')
+        }),
+        ('User & Parent', {
+            'fields': ('initiated_by', 'parent_task')
+        }),
+        ('Progress (Bulk Tasks)', {
+            'fields': ('total_accounts', 'completed_accounts', 'failed_accounts', 'progress_info'),
+            'classes': ('collapse',)
+        }),
+        ('Results', {
+            'fields': ('result_summary', 'error_message')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'started_at', 'completed_at', 'duration_display'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#FFC107',
+            'running': '#17A2B8',
+            'success': '#28A745',
+            'failed': '#DC3545',
+            'cancelled': '#6C757D',
+        }
+        color = colors.get(obj.status, '#6C757D')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; '
+            'border-radius: 3px; font-size: 11px;">{}</span>',
+            color, obj.status.upper()
+        )
+    status_badge.short_description = 'Status'
+
+    def account_info(self, obj):
+        if obj.account:
+            return f"{obj.account.account_name or obj.account.account_id}"
+        elif obj.task_type == 'bulk':
+            return f"Bulk ({obj.total_accounts} accounts)"
+        return "-"
+    account_info.short_description = 'Account'
+
+    def progress_info(self, obj):
+        if obj.task_type == 'bulk':
+            return f"{obj.completed_accounts}/{obj.total_accounts} ({obj.progress_percentage:.0f}%)"
+        return "-"
+    progress_info.short_description = 'Progress'
+
+    def duration_display(self, obj):
+        duration = obj.duration
+        if duration:
+            if duration < 60:
+                return f"{duration:.1f}s"
+            minutes = int(duration // 60)
+            seconds = duration % 60
+            return f"{minutes}m {seconds:.0f}s"
+        return "-"
+    duration_display.short_description = 'Duration'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'account', 'initiated_by', 'parent_task'
+        ).prefetch_related('child_tasks')
+
+    actions = ['cancel_tasks']
+
+    @admin.action(description='Cancel selected tasks')
+    def cancel_tasks(self, request, queryset):
+        updated = queryset.filter(status__in=['pending', 'running']).update(status='cancelled')
+        self.message_user(request, f'{updated} task(s) cancelled.')
 
 
 # Customize admin site
