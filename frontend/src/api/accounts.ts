@@ -14,16 +14,16 @@ export const accountsApi = {
     return apiClient.getPaginated<AWSAccount>(`/accounts/${queryString}`)
   },
 
-  async get(id: number): Promise<AWSAccount> {
-    return apiClient.get<AWSAccount>(`/accounts/${id}/`)
+  async get(accountId: string): Promise<AWSAccount> {
+    return apiClient.get<AWSAccount>(`/accounts/${accountId}/`)
   },
 
   async getDropdownOptions(): Promise<SelectOption[]> {
     return apiClient.get<SelectOption[]>('/accounts/dropdown_options/')
   },
 
-  async repoll(id: number): Promise<{ task_id: number }> {
-    return apiClient.post<{ task_id: number }>(`/accounts/${id}/repoll/`)
+  async repoll(accountId: string): Promise<{ task_id: number }> {
+    return apiClient.post<{ task_id: number }>(`/accounts/${accountId}/repoll/`)
   },
 
   async repollAll(): Promise<{ task_id: number; message: string }> {

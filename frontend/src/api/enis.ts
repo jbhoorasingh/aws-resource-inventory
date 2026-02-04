@@ -28,8 +28,8 @@ export const enisApi = {
     return apiClient.getPaginated<ENI>(`/enis/${queryString}`)
   },
 
-  async get(id: number): Promise<ENI> {
-    return apiClient.get<ENI>(`/enis/${id}/`)
+  async get(eniId: string): Promise<ENI> {
+    return apiClient.get<ENI>(`/enis/${eniId}/`)
   },
 
   async getSummary(): Promise<ENISummary> {

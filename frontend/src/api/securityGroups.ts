@@ -13,8 +13,8 @@ export const securityGroupsApi = {
     return apiClient.getPaginated<SecurityGroup>(`/security-groups/${queryString}`)
   },
 
-  async get(id: number): Promise<SecurityGroup> {
-    return apiClient.get<SecurityGroup>(`/security-groups/${id}/`)
+  async get(sgId: string): Promise<SecurityGroup> {
+    return apiClient.get<SecurityGroup>(`/security-groups/${sgId}/`)
   },
 
   async getFilterOptions(): Promise<FilterOptions> {

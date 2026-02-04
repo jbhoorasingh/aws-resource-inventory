@@ -31,6 +31,8 @@ class CanPollAccountsPermission:
 class AWSAccountViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AWSAccount.objects.all()
     serializer_class = AWSAccountSerializer
+    lookup_field = 'account_id'
+    lookup_url_kwarg = 'account_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
     search_fields = ['account_id', 'account_name']
@@ -60,7 +62,7 @@ class AWSAccountViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(options)
 
     @action(detail=True, methods=['post'])
-    def repoll(self, request, pk=None):
+    def repoll(self, request, account_id=None):
         """Re-poll a single account using instance role authentication"""
         from .tasks import repoll_account_with_instance_role
 
@@ -172,6 +174,8 @@ class AWSAccountViewSet(viewsets.ReadOnlyModelViewSet):
 class VPCViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = VPC.objects.all()
     serializer_class = VPCSerializer
+    lookup_field = 'vpc_id'
+    lookup_url_kwarg = 'vpc_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['region', 'is_default', 'state', 'owner_account']
     search_fields = ['vpc_id', 'cidr_block', 'owner_account']
@@ -204,7 +208,7 @@ class VPCViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def tree_detail(self, request, pk=None):
+    def tree_detail(self, request, vpc_id=None):
         """Get single VPC with nested subnets and all resources"""
         vpc = self.get_object()
         serializer = VPCTreeSerializer(vpc)
@@ -236,6 +240,8 @@ class VPCViewSet(viewsets.ReadOnlyModelViewSet):
 class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subnet.objects.select_related('vpc').all()
     serializer_class = SubnetSerializer
+    lookup_field = 'subnet_id'
+    lookup_url_kwarg = 'subnet_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vpc', 'vpc__region', 'availability_zone', 'state', 'owner_account']
     search_fields = ['subnet_id', 'name', 'cidr_block', 'owner_account']
@@ -266,7 +272,7 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def tree_detail(self, request, pk=None):
+    def tree_detail(self, request, subnet_id=None):
         """Get single subnet with nested resources"""
         subnet = self.get_object()
         serializer = SubnetTreeSerializer(subnet)
@@ -276,6 +282,8 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
 class SecurityGroupViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all()
     serializer_class = SecurityGroupSerializer
+    lookup_field = 'sg_id'
+    lookup_url_kwarg = 'sg_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vpc', 'vpc__region']
     search_fields = ['sg_id', 'name', 'description']
@@ -320,17 +328,19 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
     ).prefetch_related(
         'secondary_ips', 'eni_security_groups__security_group'
     ).all()
+    lookup_field = 'eni_id'
+    lookup_url_kwarg = 'eni_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
         'subnet', 'subnet__vpc', 'subnet__vpc__region', 'owner_account',
         'interface_type', 'status', 'attached_resource_type'
     ]
     search_fields = [
-        'eni_id', 'name', 'description', 'private_ip_address', 
+        'eni_id', 'name', 'description', 'private_ip_address',
         'public_ip_address', 'attached_resource_id'
     ]
     ordering_fields = [
-        'eni_id', 'name', 'private_ip_address', 'public_ip_address', 
+        'eni_id', 'name', 'private_ip_address', 'public_ip_address',
         'interface_type', 'status', 'created_at'
     ]
     ordering = ['eni_id']
@@ -497,6 +507,8 @@ class EC2InstanceViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for EC2 Instances"""
     queryset = EC2Instance.objects.select_related('vpc', 'subnet').all()
     serializer_class = EC2InstanceSerializer
+    lookup_field = 'instance_id'
+    lookup_url_kwarg = 'instance_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['region', 'state', 'instance_type', 'vpc', 'subnet', 'owner_account', 'platform']
     search_fields = ['instance_id', 'name', 'private_ip_address', 'public_ip_address']
@@ -609,14 +621,30 @@ class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
         data = serializer.validated_data
 
         # Get or create account immediately
-        account, _ = AWSAccount.objects.get_or_create(
+        # Set auth_method based on whether role_arn is provided
+        role_arn = data.get('role_arn', '')
+        auth_method = 'instance_role' if role_arn else 'credentials'
+
+        account, created = AWSAccount.objects.get_or_create(
             account_id=data['account_number'],
             defaults={
                 'account_name': data.get('account_name', ''),
-                'role_arn': data.get('role_arn', ''),
+                'role_arn': role_arn,
                 'external_id': data.get('external_id', ''),
+                'auth_method': auth_method,
+                'default_regions': data['regions'],
             }
         )
+
+        # If account already existed and role_arn is provided, update auth_method
+        if not created and role_arn and account.auth_method != 'instance_role':
+            account.auth_method = 'instance_role'
+            account.role_arn = role_arn
+            if data.get('external_id'):
+                account.external_id = data['external_id']
+            if data['regions']:
+                account.default_regions = data['regions']
+            account.save()
 
         # Create task record
         task_record = DiscoveryTask.objects.create(

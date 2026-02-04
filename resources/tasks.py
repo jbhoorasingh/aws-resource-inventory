@@ -206,7 +206,7 @@ def discover_account_resources(
         # Save to database
         with transaction.atomic():
             account = _get_or_create_account(
-                account_number, account_name, role_arn, external_id
+                account_number, account_name, role_arn, external_id, regions
             )
             # Delete existing ENIs and EC2 instances before saving new ones
             # (VPCs, Subnets, SGs are kept as they may be shared)
@@ -299,15 +299,30 @@ def bulk_discover_resources(
 
         for account_config in accounts_config:
             # Get or create account in database immediately
-            account, _ = AWSAccount.objects.get_or_create(
+            role_arn = account_config.get('role_arn', '')
+            defaults = {
+                'account_name': account_config.get('account_name', ''),
+                'role_arn': role_arn,
+                'external_id': account_config.get('external_id', ''),
+                'is_active': True,
+                'default_regions': regions,
+            }
+            if role_arn:
+                defaults['auth_method'] = 'instance_role'
+
+            account, created = AWSAccount.objects.get_or_create(
                 account_id=account_config['account_number'],
-                defaults={
-                    'account_name': account_config.get('account_name', ''),
-                    'role_arn': account_config.get('role_arn', ''),
-                    'external_id': account_config.get('external_id', ''),
-                    'is_active': True
-                }
+                defaults=defaults
             )
+
+            # Update existing account if role_arn is provided
+            if not created and role_arn and account.auth_method != 'instance_role':
+                account.auth_method = 'instance_role'
+                account.role_arn = role_arn
+                if account_config.get('external_id'):
+                    account.external_id = account_config['external_id']
+                account.default_regions = regions
+                account.save()
 
             # Create child task record
             child_task = DiscoveryTask.objects.create(
@@ -380,7 +395,8 @@ def _update_parent_task_progress(parent_task_id: int):
 
 
 def _get_or_create_account(account_id: str, account_name: str = None,
-                           role_arn: str = None, external_id: str = None):
+                           role_arn: str = None, external_id: str = None,
+                           regions: list = None):
     """Get or create AWS account"""
     defaults = {
         'account_name': account_name or '',
@@ -389,8 +405,11 @@ def _get_or_create_account(account_id: str, account_name: str = None,
 
     if role_arn:
         defaults['role_arn'] = role_arn
+        defaults['auth_method'] = 'instance_role'
     if external_id:
         defaults['external_id'] = external_id
+    if regions:
+        defaults['default_regions'] = regions
 
     account, created = AWSAccount.objects.get_or_create(
         account_id=account_id,
@@ -402,8 +421,12 @@ def _get_or_create_account(account_id: str, account_name: str = None,
             account.account_name = account_name
         if role_arn is not None:
             account.role_arn = role_arn
+            if role_arn:
+                account.auth_method = 'instance_role'
         if external_id is not None:
             account.external_id = external_id
+        if regions:
+            account.default_regions = regions
 
     account.last_polled = timezone.now()
     account.save()

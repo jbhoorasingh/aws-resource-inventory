@@ -192,8 +192,8 @@ CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes soft limit
 
 # Scheduled Polling Configuration
 SCHEDULED_POLLING_ENABLED = config('SCHEDULED_POLLING_ENABLED', default=True, cast=bool)
-SCHEDULED_POLLING_MAX_CONCURRENT = config('SCHEDULED_POLLING_MAX_CONCURRENT', default=2, cast=int)
-SCHEDULED_POLLING_STAGGER_SECONDS = config('SCHEDULED_POLLING_STAGGER_SECONDS', default=30, cast=int)
+SCHEDULED_POLLING_MAX_CONCURRENT = config('SCHEDULED_POLLING_MAX_CONCURRENT', default=10, cast=int)
+SCHEDULED_POLLING_STAGGER_SECONDS = config('SCHEDULED_POLLING_STAGGER_SECONDS', default=3, cast=int)
 
 # Celery Beat Schedule
 from celery.schedules import crontab

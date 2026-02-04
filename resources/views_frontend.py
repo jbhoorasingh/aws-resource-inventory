@@ -394,7 +394,7 @@ def repoll_account_view(request, account_id):
     from .tasks import repoll_account_with_instance_role
 
     try:
-        account = get_object_or_404(AWSAccount, id=account_id)
+        account = get_object_or_404(AWSAccount, account_id=account_id)
 
         # Verify account is configured for instance role auth
         if account.auth_method != 'instance_role':
@@ -696,7 +696,7 @@ def add_account_view(request):
 @permission_required('resources.can_poll_accounts', raise_exception=True)
 def edit_account_view(request, account_id):
     """Edit an existing account's configuration"""
-    account = get_object_or_404(AWSAccount, id=account_id)
+    account = get_object_or_404(AWSAccount, account_id=account_id)
 
     if request.method == 'POST':
         account.account_name = request.POST.get('account_name', '').strip()
@@ -857,7 +857,7 @@ def security_groups_view(request):
 def security_group_detail_view(request, sg_id):
     """Display detailed security group rules"""
     try:
-        security_group = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').get(id=sg_id)
+        security_group = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').get(sg_id=sg_id)
         
         # Get rules ordered by type and protocol
         rules = security_group.rules.all().order_by('rule_type', 'protocol', 'from_port')
@@ -971,7 +971,7 @@ def ec2_instance_detail_view(request, instance_id):
         ).prefetch_related(
             'enis__secondary_ips',
             'enis__eni_security_groups__security_group__rules'
-        ).get(id=instance_id)
+        ).get(instance_id=instance_id)
 
         # Get all ENIs for this instance with their security groups and rules
         enis = instance.enis.all()
@@ -1014,7 +1014,7 @@ def eni_detail_view(request, eni_id):
         ).prefetch_related(
             'secondary_ips',
             'eni_security_groups__security_group__rules'
-        ).get(id=eni_id)
+        ).get(eni_id=eni_id)
 
         # Get all security groups with their rules
         security_groups = []

@@ -166,7 +166,7 @@
       <template #cell-actions="{ item }">
         <div v-if="canPoll" class="flex items-center gap-1">
           <a
-            :href="`/accounts/${item.id}/edit/`"
+            :href="`/accounts/${item.account_id}/edit/`"
             class="text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-2 py-1 rounded transition-colors text-xs"
             title="Edit account settings"
           >
@@ -175,13 +175,13 @@
           <button
             v-if="item.can_repoll"
             @click="handleRepoll(item)"
-            :disabled="repollingAccounts.has(item.id)"
+            :disabled="repollingAccounts.has(item.account_id)"
             class="text-purple-600 hover:text-purple-800 hover:bg-purple-50 px-2 py-1 rounded transition-colors text-xs flex items-center disabled:opacity-50"
             title="Re-poll using instance role"
           >
-            <ArrowPathIcon v-if="repollingAccounts.has(item.id)" class="w-4 h-4 animate-spin" />
+            <ArrowPathIcon v-if="repollingAccounts.has(item.account_id)" class="w-4 h-4 animate-spin" />
             <ArrowPathIcon v-else class="w-4 h-4 mr-1" />
-            <span v-if="!repollingAccounts.has(item.id)">Re-poll</span>
+            <span v-if="!repollingAccounts.has(item.account_id)">Re-poll</span>
           </button>
           <span
             v-else-if="item.auth_method === 'instance_role'"
@@ -282,7 +282,7 @@ const showPollModal = ref(false)
 const showBulkPollModal = ref(false)
 const prefillAccount = ref<{ account_id: string; account_name: string } | null>(null)
 const repollAllLoading = ref(false)
-const repollingAccounts = ref<Set<number>>(new Set())
+const repollingAccounts = ref<Set<string>>(new Set())
 
 // Computed
 const activeCount = computed(() => accounts.value.filter(a => a.is_active).length)
@@ -341,12 +341,12 @@ async function handleRepollAll() {
 
 // Handle repoll single account
 async function handleRepoll(account: AWSAccount) {
-  repollingAccounts.value.add(account.id)
+  repollingAccounts.value.add(account.account_id)
   error.value = null
   successMessage.value = null
 
   try {
-    const result = await accountsApi.repoll(account.id)
+    const result = await accountsApi.repoll(account.account_id)
     successMessage.value = `Started re-polling account ${account.account_id}`
     // Navigate to task details
     setTimeout(() => {
@@ -355,7 +355,7 @@ async function handleRepoll(account: AWSAccount) {
   } catch (e: any) {
     error.value = e.response?.data?.detail || e.message || 'Failed to start re-polling'
   } finally {
-    repollingAccounts.value.delete(account.id)
+    repollingAccounts.value.delete(account.account_id)
   }
 }
 

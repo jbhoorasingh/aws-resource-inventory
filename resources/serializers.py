@@ -25,14 +25,13 @@ class AWSAccountSerializer(serializers.ModelSerializer):
         return ENI.objects.filter(owner_account=obj.account_id).count()
 
     def get_auth_method(self, obj):
-        # Check if account uses instance role (has role_arn but stored for re-polling)
-        if obj.role_arn:
-            return 'instance_role'
-        return 'credentials'
+        # Use the actual model field value
+        return obj.auth_method
 
     def get_can_repoll(self, obj):
-        # Can re-poll if it has role_arn configured
-        return bool(obj.role_arn)
+        # Use the model's can_repoll property which checks:
+        # auth_method == 'instance_role' AND role_arn AND default_regions
+        return obj.can_repoll
 
 
 class VPCSerializer(serializers.ModelSerializer):
@@ -120,14 +119,14 @@ class ENISecurityGroupSerializer(serializers.ModelSerializer):
 
 
 class ENISerializer(serializers.ModelSerializer):
-    subnet_id = serializers.CharField(source='subnet.subnet_id', read_only=True)
-    subnet_cidr = serializers.CharField(source='subnet.cidr_block', read_only=True)
-    vpc_id = serializers.CharField(source='subnet.vpc.vpc_id', read_only=True)
-    vpc_cidr = serializers.CharField(source='subnet.vpc.cidr_block', read_only=True)
-    vpc_owner_account = serializers.CharField(source='subnet.vpc.owner_account', read_only=True)
-    subnet_owner_account = serializers.CharField(source='subnet.owner_account', read_only=True)
-    availability_zone = serializers.CharField(source='subnet.availability_zone', read_only=True)
-    region = serializers.CharField(source='subnet.vpc.region', read_only=True)
+    subnet_id = serializers.CharField(source='subnet.subnet_id', read_only=True, allow_null=True)
+    subnet_cidr = serializers.CharField(source='subnet.cidr_block', read_only=True, allow_null=True)
+    vpc_id = serializers.CharField(source='subnet.vpc.vpc_id', read_only=True, allow_null=True)
+    vpc_cidr = serializers.CharField(source='subnet.vpc.cidr_block', read_only=True, allow_null=True)
+    vpc_owner_account = serializers.CharField(source='subnet.vpc.owner_account', read_only=True, allow_null=True)
+    subnet_owner_account = serializers.CharField(source='subnet.owner_account', read_only=True, allow_null=True)
+    availability_zone = serializers.CharField(source='subnet.availability_zone', read_only=True, allow_null=True)
+    region = serializers.CharField(source='subnet.vpc.region', read_only=True, allow_null=True)
 
     secondary_ips = ENISecondaryIPSerializer(many=True, read_only=True)
     security_groups = ENISecurityGroupSerializer(source='eni_security_groups', many=True, read_only=True)

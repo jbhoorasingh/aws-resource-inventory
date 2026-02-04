@@ -16,11 +16,11 @@ urlpatterns = [
     path('accounts/', views_frontend.accounts_view, name='accounts'),
     path('vpcs/', views_frontend.vpcs_view, name='vpcs'),
     path('enis/', views_frontend.enis_view, name='enis'),
-    path('enis/<int:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
+    path('enis/<str:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
     path('ec2-instances/', views_frontend.ec2_instances_view, name='ec2_instances'),
-    path('ec2-instances/<int:instance_id>/', views_frontend.ec2_instance_detail_view, name='ec2_instance_detail'),
+    path('ec2-instances/<str:instance_id>/', views_frontend.ec2_instance_detail_view, name='ec2_instance_detail'),
     path('security-groups/', views_frontend.security_groups_view, name='security_groups'),
-    path('security-groups/<int:sg_id>/', views_frontend.security_group_detail_view, name='security_group_detail'),
+    path('security-groups/<str:sg_id>/', views_frontend.security_group_detail_view, name='security_group_detail'),
 
     # EDL endpoints
     path('edl/', views_edl.edl_summary, name='edl_summary'),
@@ -37,8 +37,8 @@ urlpatterns = [
 
     # Account management
     path('accounts/add/', views_frontend.add_account_view, name='add_account'),
-    path('accounts/<int:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
-    path('accounts/<int:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
+    path('accounts/<str:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
+    path('accounts/<str:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
     path('accounts/bulk-repoll/', views_frontend.bulk_repoll_accounts_view, name='bulk_repoll_accounts'),
     path('accounts/repoll-all/', views_frontend.repoll_all_instance_role_accounts_view, name='repoll_all_accounts'),
 

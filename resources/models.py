@@ -247,7 +247,7 @@ class EC2Instance(models.Model):
 class ENI(models.Model):
     """Elastic Network Interface information"""
     eni_id = models.CharField(max_length=21, unique=True, help_text="ENI ID")
-    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='enis')
+    subnet = models.ForeignKey(Subnet, on_delete=models.SET_NULL, null=True, related_name='enis')
     ec2_instance = models.ForeignKey(EC2Instance, on_delete=models.SET_NULL, null=True, blank=True, related_name='enis', help_text="Attached EC2 instance")
     name = models.CharField(max_length=255, blank=True, help_text="ENI name tag")
     description = models.TextField(blank=True, help_text="ENI description")

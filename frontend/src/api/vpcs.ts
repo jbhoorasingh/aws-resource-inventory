@@ -11,8 +11,8 @@ export const vpcsApi = {
     return apiClient.getPaginated<VPC>(`/vpcs/${queryString}`)
   },
 
-  async get(id: number): Promise<VPC> {
-    return apiClient.get<VPC>(`/vpcs/${id}/`)
+  async get(vpcId: string): Promise<VPC> {
+    return apiClient.get<VPC>(`/vpcs/${vpcId}/`)
   },
 
   async getTree(filters: VPCFilters = {}): Promise<VPCWithResources[]> {

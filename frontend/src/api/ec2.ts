@@ -12,8 +12,8 @@ export const ec2Api = {
     return apiClient.getPaginated<EC2Instance>(`/ec2-instances/${queryString}`)
   },
 
-  async get(id: number): Promise<EC2Instance> {
-    return apiClient.get<EC2Instance>(`/ec2-instances/${id}/`)
+  async get(instanceId: string): Promise<EC2Instance> {
+    return apiClient.get<EC2Instance>(`/ec2-instances/${instanceId}/`)
   },
 
   async getFilterOptions(): Promise<FilterOptions> {
