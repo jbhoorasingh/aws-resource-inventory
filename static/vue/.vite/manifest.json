@@ -58,7 +58,7 @@
     ]
   },
   "src/islands/ec2-island.ts": {
-    "file": "ec2-island.C9Bh-Gbb.js",
+    "file": "ec2-island.C4mONOEc.js",
     "name": "ec2-island",
     "src": "src/islands/ec2-island.ts",
     "isEntry": true,
@@ -71,7 +71,7 @@
     ]
   },
   "src/islands/enis-island.ts": {
-    "file": "enis-island.Bn2nsKKL.js",
+    "file": "enis-island.BPKAX86N.js",
     "name": "enis-island",
     "src": "src/islands/enis-island.ts",
     "isEntry": true,
@@ -84,7 +84,7 @@
     ]
   },
   "src/islands/security-groups-island.ts": {
-    "file": "security-groups-island.CxM3-Qdr.js",
+    "file": "security-groups-island.Cxq2nSrQ.js",
     "name": "security-groups-island",
     "src": "src/islands/security-groups-island.ts",
     "isEntry": true,
@@ -110,7 +110,7 @@
     ]
   },
   "src/islands/vpcs-island.ts": {
-    "file": "vpcs-island.rQXseP0W.js",
+    "file": "vpcs-island.C484fO9v.js",
     "name": "vpcs-island",
     "src": "src/islands/vpcs-island.ts",
     "isEntry": true,

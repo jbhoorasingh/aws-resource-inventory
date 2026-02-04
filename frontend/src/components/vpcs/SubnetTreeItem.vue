@@ -49,7 +49,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 flex-wrap">
               <a
-                :href="`/enis/${eni.id}/`"
+                :href="`/enis/${eni.eni_id}/`"
                 class="text-blue-600 hover:text-blue-800 font-medium text-xs"
               >
                 {{ eni.eni_id }}

@@ -98,7 +98,7 @@
     >
       <template #cell-security_group="{ item }">
         <a
-          :href="`/security-groups/${item.id}/`"
+          :href="`/security-groups/${item.sg_id}/`"
           class="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm block"
         >
           {{ truncate(item.name, 25) }}
@@ -162,7 +162,7 @@
 
       <template #cell-actions="{ item }">
         <a
-          :href="`/security-groups/${item.id}/`"
+          :href="`/security-groups/${item.sg_id}/`"
           class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors text-xs flex items-center"
         >
           <EyeIcon class="w-4 h-4 mr-1" />

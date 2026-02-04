@@ -130,7 +130,7 @@
     >
       <template #cell-eni="{ item }">
         <a
-          :href="`/enis/${item.id}/`"
+          :href="`/enis/${item.eni_id}/`"
           class="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm block"
         >
           {{ truncate(item.name || item.eni_id, 20) }}
@@ -216,7 +216,7 @@
 
       <template #cell-actions="{ item }">
         <a
-          :href="`/enis/${item.id}/`"
+          :href="`/enis/${item.eni_id}/`"
           class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors text-xs flex items-center"
         >
           <EyeIcon class="w-4 h-4 mr-1" />
