@@ -7,6 +7,43 @@ from rest_framework.authtoken.models import Token
 import secrets
 
 
+# =============================================================================
+# Custom Managers for Soft Delete Support
+# =============================================================================
+
+class SoftDeleteManager(models.Manager):
+    """Default manager that excludes soft-deleted records"""
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class AllObjectsManager(models.Manager):
+    """Manager that includes soft-deleted records"""
+    pass
+
+
+class SoftDeleteMixin(models.Model):
+    """
+    Mixin for soft delete functionality.
+    Adds deleted_at, last_seen_at, and missed_polls fields.
+    """
+    deleted_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="When this resource was soft-deleted"
+    )
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="When this resource was last seen during polling"
+    )
+    missed_polls = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Number of consecutive polls where this resource was not found"
+    )
+
+    class Meta:
+        abstract = True
+
+
 class UserProfile(models.Model):
     """Extended user profile with API token for authentication"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -103,6 +140,21 @@ class AWSAccount(models.Model):
         help_text="Default regions to poll for this account (e.g., ['us-east-1', 'us-west-2'])"
     )
 
+    # Failure tracking for auto-disable
+    consecutive_failures = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Number of consecutive poll failures"
+    )
+    auto_poll_disabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether auto-polling is disabled due to consecutive failures"
+    )
+    last_failure_reason = models.TextField(
+        blank=True,
+        help_text="Reason for last poll failure"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -123,10 +175,30 @@ class AWSAccount(models.Model):
     @property
     def can_repoll(self):
         """Check if this account can be re-polled with stored configuration"""
-        return self.auth_method == 'instance_role' and bool(self.get_role_arn()) and bool(self.default_regions)
+        return (
+            self.auth_method == 'instance_role' and
+            bool(self.get_role_arn()) and
+            bool(self.default_regions) and
+            not self.auto_poll_disabled
+        )
+
+    def record_poll_success(self):
+        """Record a successful poll, resetting failure counters"""
+        self.consecutive_failures = 0
+        self.auto_poll_disabled = False
+        self.last_failure_reason = ''
+        self.save(update_fields=['consecutive_failures', 'auto_poll_disabled', 'last_failure_reason', 'updated_at'])
+
+    def record_poll_failure(self, reason: str):
+        """Record a poll failure, potentially disabling auto-poll after 3 failures"""
+        self.consecutive_failures += 1
+        self.last_failure_reason = reason[:1000] if reason else ''  # Truncate to 1000 chars
+        if self.consecutive_failures >= 3:
+            self.auto_poll_disabled = True
+        self.save(update_fields=['consecutive_failures', 'auto_poll_disabled', 'last_failure_reason', 'updated_at'])
 
 
-class VPC(models.Model):
+class VPC(SoftDeleteMixin, models.Model):
     """VPC information"""
     vpc_id = models.CharField(max_length=21, unique=True, help_text="VPC ID")
     region = models.CharField(max_length=50, help_text="AWS Region")
@@ -138,6 +210,10 @@ class VPC(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['vpc_id']
         unique_together = ['vpc_id', 'region']
@@ -146,7 +222,7 @@ class VPC(models.Model):
         return f"{self.vpc_id} ({self.region})"
 
 
-class Subnet(models.Model):
+class Subnet(SoftDeleteMixin, models.Model):
     """Subnet information"""
     subnet_id = models.CharField(max_length=24, unique=True, help_text="Subnet ID")
     vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='subnets')
@@ -159,6 +235,10 @@ class Subnet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['subnet_id']
 
@@ -166,7 +246,7 @@ class Subnet(models.Model):
         return f"{self.name or self.subnet_id} ({self.availability_zone})"
 
 
-class SecurityGroup(models.Model):
+class SecurityGroup(SoftDeleteMixin, models.Model):
     """Security Group information"""
     sg_id = models.CharField(max_length=20, unique=True, help_text="Security Group ID")
     vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='security_groups')
@@ -175,6 +255,10 @@ class SecurityGroup(models.Model):
     tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
 
     class Meta:
         ordering = ['sg_id']
@@ -217,7 +301,7 @@ class SecurityGroupRule(models.Model):
         return f"{self.rule_type.upper()} {protocol_display} {port_range} from {self.source_value}"
 
 
-class EC2Instance(models.Model):
+class EC2Instance(SoftDeleteMixin, models.Model):
     """EC2 Instance information"""
     instance_id = models.CharField(max_length=19, unique=True, help_text="EC2 Instance ID")
     vpc = models.ForeignKey(VPC, on_delete=models.SET_NULL, null=True, related_name='instances')
@@ -236,6 +320,10 @@ class EC2Instance(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['instance_id']
         unique_together = ['instance_id', 'region']
@@ -244,7 +332,7 @@ class EC2Instance(models.Model):
         return f"{self.name or self.instance_id} ({self.instance_type})"
 
 
-class ENI(models.Model):
+class ENI(SoftDeleteMixin, models.Model):
     """Elastic Network Interface information"""
     eni_id = models.CharField(max_length=21, unique=True, help_text="ENI ID")
     subnet = models.ForeignKey(Subnet, on_delete=models.SET_NULL, null=True, related_name='enis')
@@ -262,6 +350,10 @@ class ENI(models.Model):
     tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
 
     class Meta:
         ordering = ['eni_id']

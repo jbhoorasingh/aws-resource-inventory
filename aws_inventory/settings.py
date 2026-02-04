@@ -203,6 +203,18 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'resources.tasks.scheduled_poll_instance_role_accounts',
         'schedule': crontab(minute=0),  # Run at the top of every hour
     },
+    'check-stuck-tasks-every-15-min': {
+        'task': 'resources.tasks.check_stuck_tasks',
+        'schedule': crontab(minute='*/15'),  # Run every 15 minutes
+    },
+    'cleanup-old-tasks-daily': {
+        'task': 'resources.tasks.cleanup_old_tasks',
+        'schedule': crontab(minute=0, hour=2),  # Run daily at 2 AM
+    },
+    'hard-delete-old-resources-weekly': {
+        'task': 'resources.tasks.hard_delete_old_soft_deleted_resources',
+        'schedule': crontab(minute=0, hour=3, day_of_week=0),  # Run Sundays at 3 AM
+    },
 }
 
 # Logging Configuration
