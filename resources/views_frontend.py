@@ -18,6 +18,18 @@ from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup,
 logger = logging.getLogger(__name__)
 
 
+def health_check(request):
+    """Simple health check endpoint for Docker/load balancer health checks"""
+    from django.db import connection
+    try:
+        # Check database connectivity
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse({'status': 'healthy', 'database': 'ok'})
+    except Exception as e:
+        return JsonResponse({'status': 'unhealthy', 'error': str(e)}, status=503)
+
+
 @login_required
 def accounts_view(request):
     """Display accounts page with polling functionality"""

@@ -493,3 +493,30 @@ class EDLSummaryViewTest(TestCase):
         response = self.client.get(self.url)
         self.assertContains(response, 'test-sg')
         self.assertContains(response, 'sg-12345678')
+
+
+class HealthCheckViewTest(TestCase):
+    """Tests for health check endpoint."""
+
+    def setUp(self):
+        self.client = Client()
+        self.url = reverse('health_check')
+
+    def test_health_check_returns_200(self):
+        """Test health check endpoint returns 200 OK."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_health_check_returns_json(self):
+        """Test health check returns JSON response."""
+        response = self.client.get(self.url)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        data = response.json()
+        self.assertEqual(data['status'], 'healthy')
+        self.assertEqual(data['database'], 'ok')
+
+    def test_health_check_no_auth_required(self):
+        """Test health check doesn't require authentication."""
+        # No login needed, should still work
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)

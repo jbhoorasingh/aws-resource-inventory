@@ -5,6 +5,9 @@ from django.urls import path
 from . import views_frontend, views_edl
 
 urlpatterns = [
+    # Health check (no auth required)
+    path('health/', views_frontend.health_check, name='health_check'),
+
     # Authentication
     path('login/', views_frontend.login_view, name='login'),
     path('logout/', views_frontend.logout_view, name='logout'),
