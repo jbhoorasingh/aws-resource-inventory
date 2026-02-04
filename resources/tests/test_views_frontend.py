@@ -42,19 +42,18 @@ class AccountsViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'resources/accounts.html')
 
-    def test_accounts_view_displays_accounts(self):
-        """Test accounts are displayed in view."""
+    def test_accounts_view_renders_vue_component(self):
+        """Test accounts page renders Vue component mount point."""
         response = self.client.get(self.url)
-        self.assertContains(response, 'Test Account 1')
-        self.assertContains(response, 'Test Account 2')
-        self.assertContains(response, '123456789012')
-        self.assertContains(response, '987654321098')
+        # Page now uses Vue.js islands - check for Vue mount point
+        self.assertContains(response, 'id="accounts-app"')
+        self.assertContains(response, 'data-props')
 
     def test_accounts_view_context(self):
-        """Test context data."""
+        """Test context data includes can_poll flag."""
         response = self.client.get(self.url)
-        self.assertIn('accounts', response.context)
-        self.assertEqual(len(response.context['accounts']), 2)
+        # Accounts page only passes can_poll for Vue component
+        self.assertIn('can_poll', response.context)
 
 
 class PollAccountViewTest(TransactionTestCase):
@@ -168,12 +167,12 @@ class ENIsViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'resources/enis.html')
 
-    def test_enis_view_displays_enis(self):
-        """Test ENIs are displayed in view."""
+    def test_enis_view_renders_vue_component(self):
+        """Test ENIs page renders Vue component mount point."""
         response = self.client.get(self.url)
-        self.assertContains(response, 'eni-12345678')
-        self.assertContains(response, '10.0.1.10')
-        self.assertContains(response, '54.1.2.3')
+        # Page now uses Vue.js islands - check for Vue mount point
+        self.assertContains(response, 'id="enis-app"')
+        self.assertContains(response, 'data-props')
 
     def test_enis_view_context(self):
         """Test context data."""
@@ -231,12 +230,12 @@ class EC2InstancesViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'resources/ec2_instances.html')
 
-    def test_ec2_instances_view_displays_instances(self):
-        """Test instances are displayed in view."""
+    def test_ec2_instances_view_renders_vue_component(self):
+        """Test EC2 instances page renders Vue component mount point."""
         response = self.client.get(self.url)
-        self.assertContains(response, 'i-12345678')
-        self.assertContains(response, 'Test Instance')
-        self.assertContains(response, 't3.micro')
+        # Page now uses Vue.js islands - check for Vue mount point
+        self.assertContains(response, 'id="ec2-app"')
+        self.assertContains(response, 'data-props')
 
     def test_ec2_instances_view_context(self):
         """Test context data."""
@@ -285,7 +284,8 @@ class EC2InstanceDetailViewTest(TestCase):
             owner_account='123456789012',
             launch_time=timezone.now()
         )
-        self.url = reverse('ec2_instance_detail', args=[self.instance.id])
+        # URL now uses AWS instance_id, not Django database id
+        self.url = reverse('ec2_instance_detail', args=[self.instance.instance_id])
 
     def test_instance_detail_view_get(self):
         """Test GET request to instance detail view."""
@@ -303,7 +303,7 @@ class EC2InstanceDetailViewTest(TestCase):
 
     def test_instance_detail_view_404(self):
         """Test redirect for non-existent instance."""
-        url = reverse('ec2_instance_detail', args=[99999])
+        url = reverse('ec2_instance_detail', args=['i-nonexistent'])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse('ec2_instances'))
@@ -350,11 +350,12 @@ class SecurityGroupsViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'resources/security_groups.html')
 
-    def test_security_groups_view_displays_groups(self):
-        """Test security groups are displayed."""
+    def test_security_groups_view_renders_vue_component(self):
+        """Test security groups page renders Vue component mount point."""
         response = self.client.get(self.url)
-        self.assertContains(response, 'sg-12345678')
-        self.assertContains(response, 'test-sg')
+        # Page now uses Vue.js islands - check for Vue mount point
+        self.assertContains(response, 'id="security-groups-app"')
+        self.assertContains(response, 'data-props')
 
     def test_security_groups_view_context(self):
         """Test context data."""
@@ -399,7 +400,8 @@ class SecurityGroupDetailViewTest(TestCase):
             source_value='0.0.0.0/0',
             description='Allow HTTPS'
         )
-        self.url = reverse('security_group_detail', args=[self.sg.id])
+        # URL now uses AWS sg_id, not Django database id
+        self.url = reverse('security_group_detail', args=[self.sg.sg_id])
 
     def test_security_group_detail_view_get(self):
         """Test GET request to security group detail view."""
@@ -416,7 +418,7 @@ class SecurityGroupDetailViewTest(TestCase):
 
     def test_security_group_detail_view_404(self):
         """Test redirect for non-existent security group."""
-        url = reverse('security_group_detail', args=[99999])
+        url = reverse('security_group_detail', args=['sg-nonexistent'])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse('security_groups'))

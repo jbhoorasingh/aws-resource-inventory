@@ -43,7 +43,8 @@ class AWSAccountAPITest(TestCase):
 
     def test_retrieve_account(self):
         """Test GET request to retrieve single account."""
-        url = reverse('awsaccount-detail', args=[self.account1.id])
+        # ViewSet now uses account_id (AWS ID) as lookup field
+        url = reverse('awsaccount-detail', args=[self.account1.account_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['account_id'], '123456789012')
@@ -92,7 +93,8 @@ class VPCAPITest(TestCase):
 
     def test_retrieve_vpc(self):
         """Test GET request to retrieve single VPC."""
-        url = reverse('vpc-detail', args=[self.vpc1.id])
+        # ViewSet now uses vpc_id (AWS ID) as lookup field
+        url = reverse('vpc-detail', args=[self.vpc1.vpc_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['vpc_id'], 'vpc-12345678')
@@ -154,7 +156,8 @@ class SubnetAPITest(TestCase):
 
     def test_retrieve_subnet(self):
         """Test GET request to retrieve single subnet."""
-        url = reverse('subnet-detail', args=[self.subnet1.id])
+        # ViewSet now uses subnet_id (AWS ID) as lookup field
+        url = reverse('subnet-detail', args=[self.subnet1.subnet_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['subnet_id'], 'subnet-12345678')
@@ -218,7 +221,8 @@ class SecurityGroupAPITest(TestCase):
 
     def test_retrieve_security_group(self):
         """Test GET request to retrieve single security group."""
-        url = reverse('securitygroup-detail', args=[self.sg.id])
+        # ViewSet now uses sg_id (AWS ID) as lookup field
+        url = reverse('securitygroup-detail', args=[self.sg.sg_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['sg_id'], 'sg-12345678')
@@ -226,7 +230,8 @@ class SecurityGroupAPITest(TestCase):
 
     def test_security_group_includes_rules(self):
         """Test security group response includes rules."""
-        url = reverse('securitygroup-detail', args=[self.sg.id])
+        # ViewSet now uses sg_id (AWS ID) as lookup field
+        url = reverse('securitygroup-detail', args=[self.sg.sg_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should have rules in the response
@@ -291,7 +296,8 @@ class ENIAPITest(TestCase):
 
     def test_retrieve_eni(self):
         """Test GET request to retrieve single ENI."""
-        url = reverse('eni-detail', args=[self.eni1.id])
+        # ViewSet now uses eni_id (AWS ID) as lookup field
+        url = reverse('eni-detail', args=[self.eni1.eni_id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['eni_id'], 'eni-12345678')

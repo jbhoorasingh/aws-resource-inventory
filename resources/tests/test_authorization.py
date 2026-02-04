@@ -120,43 +120,23 @@ class AccountsPagePermissionTest(TestCase):
             account_name='Test Account'
         )
 
-    def test_regular_user_sees_read_only_message(self):
-        """Test that regular users see read-only message"""
+    def test_regular_user_cannot_poll(self):
+        """Test that regular users have canPoll=false in Vue props"""
         self.client.login(username='regular', password='testpass123')
         response = self.client.get(reverse('accounts'))
 
-        # Regular users should see read-only message
-        self.assertContains(response, 'Read-only access')
+        # Vue.js page passes canPoll via data-props
+        # Regular users should have canPoll: false
+        self.assertContains(response, '"canPoll": false')
 
-        # Verify poll button is not shown (not the modal content which is always in HTML)
-        # The button that opens the modal should not be present
-        response_content = response.content.decode()
-        # Check that the actual trigger buttons for polling are not visible
-        # (Modal content may exist in HTML but be hidden)
-
-    def test_privileged_user_sees_poll_buttons(self):
-        """Test that privileged users see poll buttons"""
+    def test_privileged_user_can_poll(self):
+        """Test that privileged users have canPoll=true in Vue props"""
         self.client.login(username='privileged', password='testpass123')
         response = self.client.get(reverse('accounts'))
 
-        self.assertContains(response, 'Poll with Credentials')
-        self.assertContains(response, 'Bulk Poll')
-        self.assertNotContains(response, 'Read-only access')
-
-    def test_regular_user_sees_lock_icon_in_actions(self):
-        """Test that regular users see lock icon instead of poll button"""
-        self.client.login(username='regular', password='testpass123')
-        response = self.client.get(reverse('accounts'))
-
-        self.assertContains(response, 'fa-lock')
-
-    def test_privileged_user_sees_poll_action(self):
-        """Test that privileged users see poll action button"""
-        self.client.login(username='privileged', password='testpass123')
-        response = self.client.get(reverse('accounts'))
-
-        self.assertContains(response, 'fa-sync')
-        self.assertContains(response, 'Poll')
+        # Vue.js page passes canPoll via data-props
+        # Privileged users should have canPoll: true
+        self.assertContains(response, '"canPoll": true')
 
 
 class ProfilePermissionDisplayTest(TestCase):
