@@ -12,7 +12,8 @@ import logging
 
 from .models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule,
-    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance, DiscoveryTask
+    ENI, ENISecondaryIP, ENISecurityGroup, EC2Instance, DiscoveryTask,
+    DiscoveryLog
 )
 from .services import AWSResourceDiscovery
 
@@ -25,7 +26,7 @@ TASK_RETENTION_DAYS = 30  # Days to keep task records
 SOFT_DELETE_RETENTION_DAYS = 7  # Days to keep soft-deleted resources
 
 
-def _mark_resources_for_cleanup(account_id: str, discovered_ids: dict) -> dict:
+def _mark_resources_for_cleanup(account_id: str, discovered_ids: dict, task_record=None, account=None) -> dict:
     """
     Mark resources not found in discovery for eventual soft delete.
 
@@ -40,6 +41,8 @@ def _mark_resources_for_cleanup(account_id: str, discovered_ids: dict) -> dict:
     Args:
         account_id: The AWS account ID (12-digit string)
         discovered_ids: Dict with keys 'eni_ids', 'ec2_ids', 'vpc_ids', 'subnet_ids', 'sg_ids'
+        task_record: Optional DiscoveryTask for logging
+        account: Optional AWSAccount for logging
 
     Returns:
         Dictionary with counts of affected resources
@@ -177,6 +180,19 @@ def _mark_resources_for_cleanup(account_id: str, discovered_ids: dict) -> dict:
             f"{counts['vpcs_soft_deleted']} VPCs, {counts['subnets_soft_deleted']} Subnets, "
             f"{counts['sgs_soft_deleted']} SGs"
         )
+        # Create a discovery log for the soft-delete summary
+        if task_record or account:
+            DiscoveryLog.objects.create(
+                task=task_record, account=account, level='warning',
+                category='resource_soft_deleted',
+                message=(
+                    f"Soft deleted {soft_deleted} resources for {account_id}: "
+                    f"{counts['enis_soft_deleted']} ENIs, {counts['ec2_soft_deleted']} EC2, "
+                    f"{counts['vpcs_soft_deleted']} VPCs, {counts['subnets_soft_deleted']} Subnets, "
+                    f"{counts['sgs_soft_deleted']} SGs"
+                ),
+                context=counts,
+            )
 
     return counts
 
@@ -347,10 +363,13 @@ def discover_account_resources(
             )
 
             # Save newly discovered resources (sets last_seen_at)
-            _save_resources(account, results)
+            _save_resources(account, results, task_record=task_record)
 
             # Mark resources not found for eventual soft delete
-            cleanup_counts = _mark_resources_for_cleanup(account_number, discovered_ids)
+            cleanup_counts = _mark_resources_for_cleanup(
+                account_number, discovered_ids,
+                task_record=task_record, account=account
+            )
 
             # Record successful poll
             account.record_poll_success()
@@ -370,6 +389,14 @@ def discover_account_resources(
             _update_parent_task_progress(task_record.parent_task.id)
 
         logger.info(f"Successfully completed discovery for account {account_number}")
+
+        # Log account success
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='info',
+            category='account_success',
+            message=f"Successfully discovered resources for account {account_number}",
+            context=result_summary,
+        )
 
         return {
             'status': 'success',
@@ -393,6 +420,13 @@ def discover_account_resources(
         if account:
             account.record_poll_failure(error_msg)
 
+        # Log account error
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='error',
+            category='account_error',
+            message=f"Discovery timed out for account {account_number}: {error_msg}",
+        )
+
         if task_record.parent_task:
             _update_parent_task_progress(task_record.parent_task.id)
 
@@ -415,6 +449,13 @@ def discover_account_resources(
                 pass
         if account:
             account.record_poll_failure(error_msg)
+
+        # Log account error
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='error',
+            category='account_error',
+            message=f"Discovery failed for account {account_number}: {error_msg}",
+        )
 
         if task_record.parent_task:
             _update_parent_task_progress(task_record.parent_task.id)
@@ -661,10 +702,13 @@ def repoll_account_with_instance_role(
         # Save to database and track soft deletes
         with transaction.atomic():
             # Save newly discovered resources (sets last_seen_at)
-            _save_resources(account, results)
+            _save_resources(account, results, task_record=task_record)
 
             # Mark resources not found for eventual soft delete
-            cleanup_counts = _mark_resources_for_cleanup(account.account_id, discovered_ids)
+            cleanup_counts = _mark_resources_for_cleanup(
+                account.account_id, discovered_ids,
+                task_record=task_record, account=account
+            )
 
             # Record successful poll
             account.last_polled = timezone.now()
@@ -679,6 +723,14 @@ def repoll_account_with_instance_role(
         task_record.save(update_fields=[
             'status', 'completed_at', 'result_summary'
         ])
+
+        # Log account success
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='info',
+            category='account_success',
+            message=f"Successfully discovered resources for account {account.account_id}",
+            context=result_summary,
+        )
 
         if parent_task_id:
             _update_parent_task_progress(parent_task_id)
@@ -702,6 +754,12 @@ def repoll_account_with_instance_role(
         if account:
             account.record_poll_failure(error_msg)
 
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='error',
+            category='account_error',
+            message=f"Discovery timed out for account {account.account_id if account else 'unknown'}: {error_msg}",
+        )
+
         if parent_task_id:
             _update_parent_task_progress(parent_task_id)
 
@@ -719,6 +777,12 @@ def repoll_account_with_instance_role(
         # Record failure for auto-disable tracking
         if account:
             account.record_poll_failure(error_msg)
+
+        DiscoveryLog.objects.create(
+            task=task_record, account=account, level='error',
+            category='account_error',
+            message=f"Discovery failed for account {account.account_id if account else 'unknown'}: {error_msg}",
+        )
 
         if parent_task_id:
             _update_parent_task_progress(parent_task_id)
@@ -805,11 +869,12 @@ def bulk_repoll_accounts_with_instance_role(
         raise
 
 
-def _save_resources(account: AWSAccount, results: dict):
-    """Save discovered resources to database with last_seen_at tracking"""
+def _save_resources(account: AWSAccount, results: dict, task_record=None):
+    """Save discovered resources to database with last_seen_at tracking and discovery logging"""
     now = timezone.now()
 
     for region, region_data in results['regions'].items():
+        logs = []
         logger.info(f"Processing region {region}: "
                    f"{len(region_data['vpcs'])} VPCs, "
                    f"{len(region_data['subnets'])} Subnets, "
@@ -819,7 +884,7 @@ def _save_resources(account: AWSAccount, results: dict):
 
         # Save VPCs
         for vpc_data in region_data['vpcs']:
-            VPC.all_objects.update_or_create(
+            _, created = VPC.all_objects.update_or_create(
                 vpc_id=vpc_data['vpc_id'],
                 defaults={
                     'region': region,
@@ -833,12 +898,18 @@ def _save_resources(account: AWSAccount, results: dict):
                     'deleted_at': None,  # Resurrect if previously soft-deleted
                 }
             )
+            logs.append(DiscoveryLog(
+                task=task_record, account=account, level='info',
+                category='resource_created' if created else 'resource_updated',
+                message=f"{'Created' if created else 'Updated'} VPC {vpc_data['vpc_id']}",
+                resource_type='vpc', resource_id=vpc_data['vpc_id'], region=region,
+            ))
 
         # Save Subnets
         for subnet_data in region_data['subnets']:
             try:
                 vpc = VPC.all_objects.get(vpc_id=subnet_data['vpc_id'])
-                Subnet.all_objects.update_or_create(
+                _, created = Subnet.all_objects.update_or_create(
                     subnet_id=subnet_data['subnet_id'],
                     defaults={
                         'vpc': vpc,
@@ -853,14 +924,27 @@ def _save_resources(account: AWSAccount, results: dict):
                         'deleted_at': None,
                     }
                 )
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='info',
+                    category='resource_created' if created else 'resource_updated',
+                    message=f"{'Created' if created else 'Updated'} Subnet {subnet_data['subnet_id']}",
+                    resource_type='subnet', resource_id=subnet_data['subnet_id'], region=region,
+                ))
             except VPC.DoesNotExist:
                 logger.warning(f'VPC {subnet_data["vpc_id"]} not found for subnet {subnet_data["subnet_id"]}')
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='warning',
+                    category='lookup_failed',
+                    message=f'VPC {subnet_data["vpc_id"]} not found for Subnet {subnet_data["subnet_id"]}',
+                    resource_type='subnet', resource_id=subnet_data['subnet_id'], region=region,
+                    context={'vpc_id': subnet_data['vpc_id']},
+                ))
 
         # Save Security Groups
         for sg_data in region_data['security_groups']:
             try:
                 vpc = VPC.all_objects.get(vpc_id=sg_data['vpc_id'])
-                sg, _ = SecurityGroup.all_objects.update_or_create(
+                sg, created = SecurityGroup.all_objects.update_or_create(
                     sg_id=sg_data['sg_id'],
                     defaults={
                         'vpc': vpc,
@@ -872,6 +956,12 @@ def _save_resources(account: AWSAccount, results: dict):
                         'deleted_at': None,
                     }
                 )
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='info',
+                    category='resource_created' if created else 'resource_updated',
+                    message=f"{'Created' if created else 'Updated'} SG {sg_data['sg_id']}",
+                    resource_type='security_group', resource_id=sg_data['sg_id'], region=region,
+                ))
 
                 # Clear existing rules and save new ones
                 SecurityGroupRule.objects.filter(security_group=sg).delete()
@@ -889,13 +979,20 @@ def _save_resources(account: AWSAccount, results: dict):
 
             except VPC.DoesNotExist:
                 logger.warning(f'VPC {sg_data["vpc_id"]} not found for security group {sg_data["sg_id"]}')
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='warning',
+                    category='lookup_failed',
+                    message=f'VPC {sg_data["vpc_id"]} not found for SG {sg_data["sg_id"]}',
+                    resource_type='security_group', resource_id=sg_data['sg_id'], region=region,
+                    context={'vpc_id': sg_data['vpc_id']},
+                ))
 
         # Save EC2 Instances
         for instance_data in region_data.get('ec2_instances', []):
             try:
                 vpc = VPC.all_objects.get(vpc_id=instance_data['vpc_id'])
                 subnet = Subnet.all_objects.get(subnet_id=instance_data['subnet_id'])
-                EC2Instance.all_objects.update_or_create(
+                _, created = EC2Instance.all_objects.update_or_create(
                     instance_id=instance_data['instance_id'],
                     region=region,
                     defaults={
@@ -916,8 +1013,20 @@ def _save_resources(account: AWSAccount, results: dict):
                         'deleted_at': None,
                     }
                 )
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='info',
+                    category='resource_created' if created else 'resource_updated',
+                    message=f"{'Created' if created else 'Updated'} EC2 {instance_data['instance_id']}",
+                    resource_type='ec2', resource_id=instance_data['instance_id'], region=region,
+                ))
             except (VPC.DoesNotExist, Subnet.DoesNotExist) as e:
                 logger.warning(f'VPC or Subnet not found for instance {instance_data["instance_id"]}: {e}')
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='warning',
+                    category='lookup_failed',
+                    message=f'VPC/Subnet not found for EC2 {instance_data["instance_id"]}: {e}',
+                    resource_type='ec2', resource_id=instance_data['instance_id'], region=region,
+                ))
 
         # Save ENIs
         for eni_data in region_data['enis']:
@@ -932,27 +1041,50 @@ def _save_resources(account: AWSAccount, results: dict):
                     except EC2Instance.DoesNotExist:
                         logger.warning(f'EC2 instance {eni_data["attached_resource_id"]} not found for ENI {eni_data["eni_id"]}')
 
-                eni, _ = ENI.all_objects.update_or_create(
+                eni_defaults = {
+                    'subnet': subnet,
+                    'name': eni_data['name'],
+                    'description': eni_data['description'],
+                    'interface_type': eni_data['interface_type'],
+                    'status': eni_data['status'],
+                    'mac_address': eni_data['mac_address'],
+                    'private_ip_address': eni_data['private_ip_address'],
+                    'public_ip_address': eni_data['public_ip_address'],
+                    'attached_resource_id': eni_data['attached_resource_id'],
+                    'attached_resource_type': eni_data['attached_resource_type'],
+                    'owner_account': eni_data['owner_id'],
+                    'tags': eni_data.get('tags', {}),
+                    'last_seen_at': now,
+                    'missed_polls': 0,
+                    'deleted_at': None,
+                }
+
+                # Only set ec2_instance if found — preserve existing link otherwise
+                # (cross-account polling can't see EC2s in other accounts)
+                if ec2_instance is not None:
+                    eni_defaults['ec2_instance'] = ec2_instance
+
+                eni, created = ENI.all_objects.update_or_create(
                     eni_id=eni_data['eni_id'],
-                    defaults={
-                        'subnet': subnet,
-                        'ec2_instance': ec2_instance,
-                        'name': eni_data['name'],
-                        'description': eni_data['description'],
-                        'interface_type': eni_data['interface_type'],
-                        'status': eni_data['status'],
-                        'mac_address': eni_data['mac_address'],
-                        'private_ip_address': eni_data['private_ip_address'],
-                        'public_ip_address': eni_data['public_ip_address'],
-                        'attached_resource_id': eni_data['attached_resource_id'],
-                        'attached_resource_type': eni_data['attached_resource_type'],
-                        'owner_account': eni_data['owner_id'],
-                        'tags': eni_data.get('tags', {}),
-                        'last_seen_at': now,
-                        'missed_polls': 0,
-                        'deleted_at': None,
-                    }
+                    defaults=eni_defaults
                 )
+
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='info',
+                    category='resource_created' if created else 'resource_updated',
+                    message=f"{'Created' if created else 'Updated'} ENI {eni_data['eni_id']}",
+                    resource_type='eni', resource_id=eni_data['eni_id'], region=region,
+                ))
+
+                # Log when EC2 link couldn't be resolved (cross-account scenario)
+                if ec2_instance is None and eni_data['attached_resource_type'] == 'instance' and eni_data['attached_resource_id']:
+                    logs.append(DiscoveryLog(
+                        task=task_record, account=account, level='warning',
+                        category='ec2_link_preserved',
+                        message=f"EC2 {eni_data['attached_resource_id']} not found for ENI {eni_data['eni_id']} — preserving existing link",
+                        resource_type='eni', resource_id=eni_data['eni_id'], region=region,
+                        context={'ec2_id': eni_data['attached_resource_id']},
+                    ))
 
                 # Clear existing secondary IPs and save new ones
                 ENISecondaryIP.objects.filter(eni=eni).delete()
@@ -973,9 +1105,27 @@ def _save_resources(account: AWSAccount, results: dict):
                         )
                     except SecurityGroup.DoesNotExist:
                         logger.warning(f'Security Group {sg_id} not found for ENI {eni_data["eni_id"]}')
+                        logs.append(DiscoveryLog(
+                            task=task_record, account=account, level='warning',
+                            category='lookup_failed',
+                            message=f'SG {sg_id} not found for ENI {eni_data["eni_id"]}',
+                            resource_type='eni', resource_id=eni_data['eni_id'], region=region,
+                            context={'sg_id': sg_id},
+                        ))
 
             except Subnet.DoesNotExist:
                 logger.warning(f'Subnet {eni_data["subnet_id"]} not found for ENI {eni_data["eni_id"]}')
+                logs.append(DiscoveryLog(
+                    task=task_record, account=account, level='warning',
+                    category='lookup_failed',
+                    message=f'Subnet {eni_data["subnet_id"]} not found for ENI {eni_data["eni_id"]}',
+                    resource_type='eni', resource_id=eni_data['eni_id'], region=region,
+                    context={'subnet_id': eni_data['subnet_id']},
+                ))
+
+        # Bulk create logs for this region
+        if logs:
+            DiscoveryLog.objects.bulk_create(logs)
 
 
 @shared_task(bind=True)

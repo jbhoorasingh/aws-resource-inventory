@@ -13,6 +13,7 @@ router.register(r'security-groups', views.SecurityGroupViewSet)
 router.register(r'enis', views.ENIViewSet)
 router.register(r'ec2-instances', views.EC2InstanceViewSet)
 router.register(r'discovery-tasks', views.DiscoveryTaskViewSet)
+router.register(r'discovery-logs', views.DiscoveryLogViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

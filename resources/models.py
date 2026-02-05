@@ -217,6 +217,9 @@ class VPC(SoftDeleteMixin, models.Model):
     class Meta:
         ordering = ['vpc_id']
         unique_together = ['vpc_id', 'region']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='vpc_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.vpc_id} ({self.region})"
@@ -241,6 +244,9 @@ class Subnet(SoftDeleteMixin, models.Model):
 
     class Meta:
         ordering = ['subnet_id']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='subnet_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.subnet_id} ({self.availability_zone})"
@@ -327,6 +333,9 @@ class EC2Instance(SoftDeleteMixin, models.Model):
     class Meta:
         ordering = ['instance_id']
         unique_together = ['instance_id', 'region']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='ec2_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.instance_id} ({self.instance_type})"
@@ -357,6 +366,9 @@ class ENI(SoftDeleteMixin, models.Model):
 
     class Meta:
         ordering = ['eni_id']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='eni_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.eni_id} ({self.private_ip_address})"
@@ -477,3 +489,53 @@ class DiscoveryTask(models.Model):
             return int((self.completed_accounts + self.failed_accounts) /
                        self.total_accounts * 100)
         return 0
+
+
+class DiscoveryLog(models.Model):
+    """Resource-level log entries generated during discovery tasks."""
+
+    LEVEL_CHOICES = [
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('resource_created', 'Resource Created'),
+        ('resource_updated', 'Resource Updated'),
+        ('resource_skipped', 'Resource Skipped'),
+        ('resource_soft_deleted', 'Resource Soft Deleted'),
+        ('resource_resurrected', 'Resource Resurrected'),
+        ('ec2_link_preserved', 'EC2 Link Preserved'),
+        ('lookup_failed', 'Lookup Failed'),
+        ('account_error', 'Account Error'),
+        ('account_success', 'Account Success'),
+    ]
+
+    task = models.ForeignKey(
+        DiscoveryTask, on_delete=models.CASCADE,
+        related_name='logs', null=True, blank=True
+    )
+    account = models.ForeignKey(
+        AWSAccount, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='discovery_logs'
+    )
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='info', db_index=True)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, db_index=True)
+    message = models.TextField()
+    resource_type = models.CharField(max_length=30, blank=True, db_index=True)
+    resource_id = models.CharField(max_length=255, blank=True, db_index=True)
+    region = models.CharField(max_length=30, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['task', 'level'], name='discoverylog_task_level_idx'),
+            models.Index(fields=['account', 'created_at'], name='discoverylog_acct_created_idx'),
+            models.Index(fields=['resource_type', 'resource_id'], name='discoverylog_res_type_id_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.category}: {self.message[:80]}"

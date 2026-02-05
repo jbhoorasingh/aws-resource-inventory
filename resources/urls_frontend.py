@@ -49,6 +49,9 @@ urlpatterns = [
     path('tasks/', views_frontend.task_status_view, name='task_status'),
     path('tasks/<int:task_id>/', views_frontend.task_detail_view, name='task_detail'),
 
+    # Discovery logs
+    path('logs/', views_frontend.discovery_logs_view, name='discovery_logs'),
+
     # API endpoints
     path('api/accounts/', views_frontend.api_accounts_json, name='api_accounts'),
     path('api/enis/', views_frontend.api_enis_json, name='api_enis'),

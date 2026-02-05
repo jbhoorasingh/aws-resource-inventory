@@ -11,14 +11,15 @@ from django.db import transaction
 from django.utils import timezone
 from .models import (
     AWSAccount, VPC, Subnet, SecurityGroup, ENI, EC2Instance,
-    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask, DiscoveryLog
 )
 from .serializers import (
     AWSAccountSerializer, VPCSerializer, SubnetSerializer,
     SecurityGroupSerializer, ENISerializer, ENIDetailSerializer,
     EC2InstanceSerializer, ResourceSummarySerializer, VPCTreeSerializer,
     SubnetTreeSerializer, DiscoveryTaskSerializer, DiscoveryTaskDetailSerializer,
-    TriggerDiscoverySerializer, TriggerBulkDiscoverySerializer
+    TriggerDiscoverySerializer, TriggerBulkDiscoverySerializer,
+    DiscoveryLogSerializer
 )
 
 
@@ -751,3 +752,33 @@ class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
             'failed': qs.filter(status='failed').count(),
             'cancelled': qs.filter(status='cancelled').count(),
         })
+
+    @action(detail=True, methods=['get'])
+    def logs(self, request, pk=None):
+        """Get discovery logs for a specific task"""
+        task = self.get_object()
+        logs = DiscoveryLog.objects.filter(task=task).select_related('account')
+        level = request.query_params.get('level')
+        if level:
+            logs = logs.filter(level=level)
+        category = request.query_params.get('category')
+        if category:
+            logs = logs.filter(category=category)
+        page = self.paginate_queryset(logs)
+        if page is not None:
+            serializer = DiscoveryLogSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = DiscoveryLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class DiscoveryLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for viewing discovery logs with filtering and search"""
+    queryset = DiscoveryLog.objects.select_related('account', 'task').all()
+    serializer_class = DiscoveryLogSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['level', 'category', 'resource_type', 'region', 'task', 'account']
+    search_fields = ['message', 'resource_id']
+    ordering_fields = ['created_at', 'level']
+    ordering = ['-created_at']

@@ -4,7 +4,7 @@ Serializers for AWS resources API
 from rest_framework import serializers
 from .models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
-    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask, DiscoveryLog
 )
 
 
@@ -349,3 +349,18 @@ class TriggerBulkDiscoverySerializer(serializers.Serializer):
     session_token = serializers.CharField(required=False, allow_blank=True, default='')
     regions = serializers.ListField(child=serializers.CharField())
     accounts = BulkDiscoveryAccountSerializer(many=True)
+
+
+class DiscoveryLogSerializer(serializers.ModelSerializer):
+    """Serializer for discovery log entries"""
+    account_id = serializers.CharField(source='account.account_id', read_only=True, default=None)
+    account_name = serializers.CharField(source='account.account_name', read_only=True, default=None)
+    task_status = serializers.CharField(source='task.status', read_only=True, default=None)
+
+    class Meta:
+        model = DiscoveryLog
+        fields = [
+            'id', 'task', 'account_id', 'account_name', 'level', 'category',
+            'message', 'resource_type', 'resource_id', 'region',
+            'context', 'created_at', 'task_status'
+        ]

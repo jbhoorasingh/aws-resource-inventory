@@ -13,7 +13,8 @@ from django.db import transaction
 from django.utils import timezone
 import json
 import logging
-from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance, DiscoveryTask
+from django.core.paginator import Paginator
+from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance, DiscoveryTask, DiscoveryLog
 
 logger = logging.getLogger(__name__)
 
@@ -1167,8 +1168,77 @@ def task_detail_view(request, task_id):
         messages.error(request, 'Access denied.')
         return redirect('task_status')
 
+    # Get logs for this task, with optional level filter
+    logs = DiscoveryLog.objects.filter(task=task).select_related('account').order_by('-created_at')
+    log_level = request.GET.get('log_level')
+    if log_level:
+        logs = logs.filter(level=log_level)
+
     context = {
         'task': task,
         'child_tasks': task.child_tasks.all().order_by('-created_at'),
+        'logs': logs[:200],
+        'log_level': log_level or '',
+        'log_counts': {
+            'info': DiscoveryLog.objects.filter(task=task, level='info').count(),
+            'warning': DiscoveryLog.objects.filter(task=task, level='warning').count(),
+            'error': DiscoveryLog.objects.filter(task=task, level='error').count(),
+        },
     }
     return render(request, 'resources/task_detail.html', context)
+
+
+@login_required
+def discovery_logs_view(request):
+    """Display discovery logs with filtering and pagination"""
+    logs = DiscoveryLog.objects.select_related('account', 'task').all()
+
+    # Apply filters
+    level = request.GET.get('level')
+    if level:
+        logs = logs.filter(level=level)
+
+    category = request.GET.get('category')
+    if category:
+        logs = logs.filter(category=category)
+
+    resource_type = request.GET.get('resource_type')
+    if resource_type:
+        logs = logs.filter(resource_type=resource_type)
+
+    account_id = request.GET.get('account')
+    if account_id:
+        logs = logs.filter(account__account_id=account_id)
+
+    task_id = request.GET.get('task')
+    if task_id:
+        logs = logs.filter(task_id=task_id)
+
+    search = request.GET.get('search')
+    if search:
+        logs = logs.filter(
+            Q(message__icontains=search) | Q(resource_id__icontains=search)
+        )
+
+    # Get filter options for the template
+    accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+    categories = DiscoveryLog.CATEGORY_CHOICES
+    resource_types = DiscoveryLog.objects.values_list('resource_type', flat=True).distinct().order_by('resource_type')
+
+    # Paginate
+    paginator = Paginator(logs, 50)
+    page = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'logs': page,
+        'level': level or '',
+        'category': category or '',
+        'resource_type': resource_type or '',
+        'account_id': account_id or '',
+        'task_id': task_id or '',
+        'search': search or '',
+        'accounts': accounts,
+        'categories': categories,
+        'resource_types': resource_types,
+    }
+    return render(request, 'resources/discovery_logs.html', context)
