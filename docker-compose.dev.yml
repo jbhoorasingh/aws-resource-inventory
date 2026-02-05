@@ -58,7 +58,11 @@ services:
       ALLOWED_HOSTS: "*"
       # Database - use Docker service name
       DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
-      POSTGRES_HOST: db
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       # Celery - use Docker service name
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -98,7 +102,11 @@ services:
       DEBUG: "True"
       # Database - use Docker service name
       DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
-      POSTGRES_HOST: db
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       # Celery - use Docker service name
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -129,7 +137,11 @@ services:
       DEBUG: "True"
       # Database - use Docker service name
       DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-devpassword}@db:5432/${POSTGRES_DB:-awsinventory_dev}
-      POSTGRES_HOST: db
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       # Celery - use Docker service name
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0

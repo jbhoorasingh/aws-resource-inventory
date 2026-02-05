@@ -59,8 +59,13 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
-      # Database - use DATABASE_URL from .env
+      # Database
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
 
       # AWS credentials (optional - can be provided at runtime)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -124,8 +129,13 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
 
-      # Database - use DATABASE_URL from .env
+      # Database
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
 
       # Celery settings
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -160,8 +170,13 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
 
-      # Database - use DATABASE_URL from .env
+      # Database
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_HOST: ${DATABASE_HOST:-db}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
+      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
 
       # Celery settings
       CELERY_BROKER_URL: redis://redis:6379/0
