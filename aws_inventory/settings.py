@@ -74,8 +74,10 @@ TEMPLATES = [
 WSGI_APPLICATION = 'aws_inventory.wsgi.application'
 
 # Database
-# Use DATABASE_URL if available, otherwise fall back to individual settings or SQLite
-DATABASE_URL = config('DATABASE_URL', default='')
+# Priority: DATABASE_URL env var > POSTGRES_HOST env var > individual config > SQLite
+# Uses os.environ.get() for Docker env vars (not decouple) to avoid conflicts
+# with .env file when source is volume-mounted into a container.
+DATABASE_URL = os.environ.get('DATABASE_URL', '') or config('DATABASE_URL', default='')
 
 if DATABASE_URL:
     # Parse DATABASE_URL (format: postgresql://user:password@host:port/dbname)
@@ -85,24 +87,24 @@ if DATABASE_URL:
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': url.path[1:],  # Remove leading slash
-            'USER': url.username,
-            'PASSWORD': url.password,
-            'HOST': url.hostname,
+            'USER': url.username or '',
+            'PASSWORD': urllib.parse.unquote(url.password) if url.password else '',
+            'HOST': url.hostname or 'localhost',
             'PORT': url.port or '5432',
         }
     }
 else:
     # Fall back to individual PostgreSQL settings or SQLite
-    POSTGRES_HOST = config('POSTGRES_HOST', default='')
+    POSTGRES_HOST = os.environ.get('POSTGRES_HOST', '') or config('POSTGRES_HOST', default='')
     if POSTGRES_HOST:
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
-                'NAME': config('POSTGRES_DB', default='awsinventory'),
-                'USER': config('POSTGRES_USER', default='awsinventory'),
-                'PASSWORD': config('POSTGRES_PASSWORD', default=''),
+                'NAME': os.environ.get('POSTGRES_DB', '') or config('POSTGRES_DB', default='awsinventory'),
+                'USER': os.environ.get('POSTGRES_USER', '') or config('POSTGRES_USER', default='awsinventory'),
+                'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '') or config('POSTGRES_PASSWORD', default=''),
                 'HOST': POSTGRES_HOST,
-                'PORT': config('POSTGRES_PORT', default='5432'),
+                'PORT': os.environ.get('POSTGRES_PORT', '') or config('POSTGRES_PORT', default='5432'),
             }
         }
     else:
