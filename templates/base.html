@@ -31,117 +31,244 @@
             animation: fadeIn 0.4s ease;
         }
 
-        /* Minimal custom styles - most styling via Tailwind */
-
+        /* Sidebar scrollbar */
+        .sidebar-nav::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-50 font-sans text-gray-800">
-    <!-- Navigation -->
-    <nav class="bg-gradient-to-r from-aws-dark to-aws-light shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex">
-                    <div class="flex-shrink-0 flex items-center">
-                        <a href="{% url 'accounts' %}" class="text-white font-bold text-xl tracking-wide">
-                            <i class="fas fa-cloud text-aws-orange"></i> AWS Resource Inventory
-                        </a>
-                    </div>
-                    <div class="hidden sm:ml-8 sm:flex sm:space-x-2">
-                        <a href="{% url 'accounts' %}" class="{% if request.resolver_match.url_name == 'accounts' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-users mr-2"></i> Accounts
-                        </a>
-                        <a href="{% url 'vpcs' %}" class="{% if request.resolver_match.url_name == 'vpcs' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-cloud mr-2"></i> VPCs
-                        </a>
-                        <a href="{% url 'enis' %}" class="{% if request.resolver_match.url_name == 'enis' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-network-wired mr-2"></i> ENIs
-                        </a>
-                        <a href="{% url 'ec2_instances' %}" class="{% if request.resolver_match.url_name == 'ec2_instances' or request.resolver_match.url_name == 'ec2_instance_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-server mr-2"></i> EC2
-                        </a>
-                        <a href="{% url 'security_groups' %}" class="{% if request.resolver_match.url_name == 'security_groups' or request.resolver_match.url_name == 'security_group_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-shield-alt mr-2"></i> Security Groups
-                        </a>
-                        <a href="{% url 'edl_summary' %}" class="{% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-list-alt mr-2"></i> EDL
-                        </a>
-                        <a href="{% url 'task_status' %}" class="{% if request.resolver_match.url_name == 'task_status' or request.resolver_match.url_name == 'task_detail' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-tasks mr-2"></i> Tasks
-                        </a>
-                        <a href="{% url 'discovery_logs' %}" class="{% if request.resolver_match.url_name == 'discovery_logs' %}bg-white bg-opacity-20{% else %}hover:bg-white hover:bg-opacity-10{% endif %} text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-scroll mr-2"></i> Logs
-                        </a>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-2">
-                    {% if user.is_authenticated %}
-                        <!-- User dropdown -->
-                        <div class="relative" x-data="{ open: false }">
-                            <button @click="open = !open" @click.away="open = false"
-                                    class="text-white hover:bg-white hover:bg-opacity-10 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                                <i class="fas fa-user-circle mr-2"></i>
-                                {{ user.username }}
-                                <i class="fas fa-chevron-down ml-2 text-xs"></i>
-                            </button>
-                            <div x-show="open"
-                                 x-transition:enter="transition ease-out duration-100"
-                                 x-transition:enter-start="transform opacity-0 scale-95"
-                                 x-transition:enter-end="transform opacity-100 scale-100"
-                                 x-transition:leave="transition ease-in duration-75"
-                                 x-transition:leave-start="transform opacity-100 scale-100"
-                                 x-transition:leave-end="transform opacity-0 scale-95"
-                                 class="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
-                                 style="display: none;">
-                                <div class="py-1">
-                                    <a href="{% url 'profile' %}"
-                                       class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
-                                        <i class="fas fa-user mr-2 text-gray-400"></i> Profile
-                                    </a>
-                                    {% if user.is_staff %}
-                                        <a href="/admin/" target="_blank"
-                                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
-                                            <i class="fas fa-cog mr-2 text-gray-400"></i> Admin Panel
-                                        </a>
-                                    {% endif %}
-                                    <div class="border-t border-gray-100"></div>
-                                    <a href="{% url 'logout' %}"
-                                       class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200">
-                                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    {% else %}
-                        <a href="{% url 'login' %}?next={{ request.path }}"
-                           class="text-white hover:bg-white hover:bg-opacity-10 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center">
-                            <i class="fas fa-sign-in-alt mr-2"></i> Login
+<body class="bg-gray-50 font-sans text-gray-800"
+      x-data="{
+          sidebarOpen: true,
+          mobileMenuOpen: false,
+          init() {
+              const saved = localStorage.getItem('sidebarOpen');
+              this.sidebarOpen = saved === null ? true : saved === 'true';
+              this.$watch('sidebarOpen', val => localStorage.setItem('sidebarOpen', val));
+          }
+      }">
+
+    {% if user.is_authenticated %}
+    <!-- Mobile backdrop -->
+    <div x-show="mobileMenuOpen"
+         x-transition:enter="transition-opacity ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="mobileMenuOpen = false"
+         class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+         style="display: none;"></div>
+
+    <!-- Sidebar -->
+    <aside class="fixed top-0 left-0 h-full z-50 bg-gradient-to-b from-aws-dark to-aws-light shadow-lg flex flex-col transition-all duration-300 ease-in-out"
+           :class="[
+               mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
+               'lg:translate-x-0',
+               sidebarOpen ? 'w-60' : 'w-16'
+           ]">
+
+        <!-- Logo section -->
+        <div class="flex items-center h-16 px-4 flex-shrink-0 border-b border-white border-opacity-10">
+            <a href="{% url 'accounts' %}" class="flex items-center min-w-0 overflow-hidden">
+                <i class="fas fa-cloud text-aws-orange text-xl flex-shrink-0"></i>
+                <span class="ml-3 text-white font-bold text-lg tracking-wide whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'">
+                    AWS Inventory
+                </span>
+            </a>
+        </div>
+
+        <!-- Toggle button (desktop only) -->
+        <button @click="sidebarOpen = !sidebarOpen"
+                class="hidden lg:flex items-center justify-center h-8 mx-3 mt-3 mb-1 rounded-md text-gray-400 hover:text-white hover:bg-white hover:bg-opacity-10 transition-all duration-200">
+            <i class="fas fa-chevron-left text-xs transition-transform duration-300"
+               :class="sidebarOpen ? '' : 'rotate-180'"></i>
+        </button>
+
+        <!-- Navigation items -->
+        <nav class="flex-1 overflow-y-auto sidebar-nav px-3 py-2 space-y-1">
+            <!-- Accounts -->
+            <a href="{% url 'accounts' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'accounts' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'Accounts'">
+                <i class="fas fa-users w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'accounts' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">Accounts</span>
+            </a>
+
+            <!-- VPCs -->
+            <a href="{% url 'vpcs' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'vpcs' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'VPCs'">
+                <i class="fas fa-cloud w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'vpcs' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">VPCs</span>
+            </a>
+
+            <!-- ENIs -->
+            <a href="{% url 'enis' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'enis' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'ENIs'">
+                <i class="fas fa-network-wired w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'enis' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">ENIs</span>
+            </a>
+
+            <!-- EC2 -->
+            <a href="{% url 'ec2_instances' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'ec2_instances' or request.resolver_match.url_name == 'ec2_instance_detail' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'EC2'">
+                <i class="fas fa-server w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'ec2_instances' or request.resolver_match.url_name == 'ec2_instance_detail' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">EC2</span>
+            </a>
+
+            <!-- Security Groups -->
+            <a href="{% url 'security_groups' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'security_groups' or request.resolver_match.url_name == 'security_group_detail' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'Security Groups'">
+                <i class="fas fa-shield-alt w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'security_groups' or request.resolver_match.url_name == 'security_group_detail' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">Security Groups</span>
+            </a>
+
+            <!-- EDL -->
+            <a href="{% url 'edl_summary' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'EDL'">
+                <i class="fas fa-list-alt w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'edl_summary' or 'edl' in request.resolver_match.url_name %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">EDL</span>
+            </a>
+
+            <!-- Tasks -->
+            <a href="{% url 'task_status' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'task_status' or request.resolver_match.url_name == 'task_detail' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'Tasks'">
+                <i class="fas fa-tasks w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'task_status' or request.resolver_match.url_name == 'task_detail' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">Tasks</span>
+            </a>
+
+            <!-- Logs -->
+            <a href="{% url 'discovery_logs' %}"
+               class="group flex items-center h-10 rounded-lg transition-all duration-200 {% if request.resolver_match.url_name == 'discovery_logs' %}bg-white bg-opacity-20 text-white{% else %}text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white{% endif %}"
+               :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+               :title="sidebarOpen ? '' : 'Logs'">
+                <i class="fas fa-scroll w-5 text-center flex-shrink-0 {% if request.resolver_match.url_name == 'discovery_logs' %}text-aws-orange{% endif %}"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">Logs</span>
+            </a>
+        </nav>
+
+        <!-- User section (bottom) -->
+        <div class="flex-shrink-0 border-t border-white border-opacity-10 px-3 py-3" x-data="{ userOpen: false }">
+            <button @click="userOpen = !userOpen" @click.away="userOpen = false"
+                    class="w-full flex items-center rounded-lg text-gray-300 hover:bg-white hover:bg-opacity-10 hover:text-white transition-all duration-200 h-10"
+                    :class="sidebarOpen ? 'px-3' : 'justify-center px-0'"
+                    :title="sidebarOpen ? '' : '{{ user.username }}'">
+                <i class="fas fa-user-circle w-5 text-center flex-shrink-0"></i>
+                <span class="ml-3 text-sm font-medium whitespace-nowrap transition-opacity duration-300 truncate"
+                      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'">
+                    {{ user.username }}
+                </span>
+                <i class="fas fa-chevron-up ml-auto text-xs flex-shrink-0 transition-transform duration-200"
+                   :class="[sidebarOpen ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden', userOpen ? '' : 'rotate-180']"></i>
+            </button>
+
+            <!-- Upward dropdown -->
+            <div x-show="userOpen"
+                 x-transition:enter="transition ease-out duration-100"
+                 x-transition:enter-start="transform opacity-0 -translate-y-2"
+                 x-transition:enter-end="transform opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="transform opacity-100 translate-y-0"
+                 x-transition:leave-end="transform opacity-0 -translate-y-2"
+                 class="absolute bottom-16 left-3 right-3 mb-1 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+                 style="display: none;">
+                <div class="py-1">
+                    <a href="{% url 'profile' %}"
+                       class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
+                        <i class="fas fa-user mr-2 text-gray-400"></i> Profile
+                    </a>
+                    {% if user.is_staff %}
+                        <a href="/admin/" target="_blank"
+                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200">
+                            <i class="fas fa-cog mr-2 text-gray-400"></i> Admin Panel
                         </a>
                     {% endif %}
+                    <div class="border-t border-gray-100"></div>
+                    <a href="{% url 'logout' %}"
+                       class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                    </a>
                 </div>
             </div>
         </div>
-    </nav>
+    </aside>
+    {% endif %}
 
-    <!-- Main Content -->
-    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% if messages %}
-            <div class="space-y-4 mb-6">
-                {% for message in messages %}
-                    <div class="{% if message.tags == 'success' %}bg-green-50 border-l-4 border-green-500 text-green-700{% elif message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% elif message.tags == 'warning' %}bg-yellow-50 border-l-4 border-yellow-500 text-yellow-700{% else %}bg-blue-50 border-l-4 border-blue-500 text-blue-700{% endif %} p-4 rounded-lg shadow-sm" role="alert">
-                        <div class="flex items-center justify-between">
-                            <p class="text-sm">{{ message }}</p>
-                            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-gray-400 hover:text-gray-600">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
+    <!-- Main content wrapper -->
+    <div class="min-h-screen {% if user.is_authenticated %}transition-all duration-300 ease-in-out{% endif %}"
+         {% if user.is_authenticated %}:class="sidebarOpen ? 'lg:ml-60' : 'lg:ml-16'"{% endif %}>
+
+        {% if user.is_authenticated %}
+        <!-- Mobile top bar -->
+        <div class="sticky top-0 z-30 bg-gradient-to-r from-aws-dark to-aws-light shadow-lg h-14 flex items-center px-4 lg:hidden">
+            <button @click="mobileMenuOpen = !mobileMenuOpen"
+                    class="text-white hover:bg-white hover:bg-opacity-10 p-2 rounded-lg transition-all duration-200">
+                <i class="fas fa-bars text-lg"></i>
+            </button>
+            <a href="{% url 'accounts' %}" class="ml-3 text-white font-bold text-lg tracking-wide">
+                <i class="fas fa-cloud text-aws-orange"></i> AWS Inventory
+            </a>
+        </div>
         {% endif %}
 
-        {% block content %}{% endblock %}
-    </main>
+        <!-- Main content -->
+        <main class="{% if user.is_authenticated %}px-4 sm:px-6 lg:px-8 py-8 max-w-[1600px] mx-auto{% else %}min-h-screen{% endif %}">
+            {% if messages %}
+                <div class="{% if user.is_authenticated %}space-y-4 mb-6{% else %}max-w-md mx-auto pt-8 px-4 space-y-4{% endif %}">
+                    {% for message in messages %}
+                        <div class="{% if message.tags == 'success' %}bg-green-50 border-l-4 border-green-500 text-green-700{% elif message.tags == 'error' %}bg-red-50 border-l-4 border-red-500 text-red-700{% elif message.tags == 'warning' %}bg-yellow-50 border-l-4 border-yellow-500 text-yellow-700{% else %}bg-blue-50 border-l-4 border-blue-500 text-blue-700{% endif %} p-4 rounded-lg shadow-sm" role="alert">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm">{{ message }}</p>
+                                <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% block extra_js %}{% endblock %}
