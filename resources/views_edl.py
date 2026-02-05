@@ -275,8 +275,9 @@ def edl_enis_by_tags(request):
         return HttpResponse(f"Error generating EDL: {str(e)}", status=500)
 
 
+@login_required
 def edl_enis_by_tags_json(request):
-    """JSON endpoint for tag-filtered ENI EDL metadata"""
+    """JSON endpoint for tag-filtered ENI EDL metadata (preview)"""
     try:
         # Start with all ENIs
         enis = ENI.objects.all()

@@ -1,0 +1,123 @@
+{
+  "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js": {
+    "file": "chunks/DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+    "name": "DataTable.vue_vue_type_script_setup_true_lang",
+    "imports": [
+      "_main.C7xCgVXk.js"
+    ]
+  },
+  "_ExclamationTriangleIcon.Cm5cZsyf.js": {
+    "file": "chunks/ExclamationTriangleIcon.Cm5cZsyf.js",
+    "name": "ExclamationTriangleIcon",
+    "imports": [
+      "_main.C7xCgVXk.js"
+    ]
+  },
+  "_EyeIcon.DGgODSOS.js": {
+    "file": "chunks/EyeIcon.DGgODSOS.js",
+    "name": "EyeIcon",
+    "imports": [
+      "_main.C7xCgVXk.js"
+    ]
+  },
+  "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js": {
+    "file": "chunks/SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+    "name": "SearchableSelect.vue_vue_type_script_setup_true_lang",
+    "imports": [
+      "_main.C7xCgVXk.js"
+    ]
+  },
+  "_main.!~{007}~.js": {
+    "file": "assets/main.jmgURPr0.css",
+    "src": "_main.!~{007}~.js"
+  },
+  "_main.C7xCgVXk.js": {
+    "file": "chunks/main.C7xCgVXk.js",
+    "name": "main",
+    "css": [
+      "assets/main.jmgURPr0.css"
+    ]
+  },
+  "_tasks.B3qtl_sQ.js": {
+    "file": "chunks/tasks.B3qtl_sQ.js",
+    "name": "tasks",
+    "imports": [
+      "_main.C7xCgVXk.js"
+    ]
+  },
+  "src/islands/accounts-island.ts": {
+    "file": "accounts-island.DaL6W1fI.js",
+    "name": "accounts-island",
+    "src": "src/islands/accounts-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+      "_tasks.B3qtl_sQ.js",
+      "_ExclamationTriangleIcon.Cm5cZsyf.js"
+    ]
+  },
+  "src/islands/ec2-island.ts": {
+    "file": "ec2-island.Srpxsh1N.js",
+    "name": "ec2-island",
+    "src": "src/islands/ec2-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+      "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+      "_ExclamationTriangleIcon.Cm5cZsyf.js",
+      "_EyeIcon.DGgODSOS.js"
+    ]
+  },
+  "src/islands/enis-island.ts": {
+    "file": "enis-island.DWIvM1b2.js",
+    "name": "enis-island",
+    "src": "src/islands/enis-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+      "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+      "_ExclamationTriangleIcon.Cm5cZsyf.js",
+      "_EyeIcon.DGgODSOS.js"
+    ]
+  },
+  "src/islands/security-groups-island.ts": {
+    "file": "security-groups-island.Dnrv8DSU.js",
+    "name": "security-groups-island",
+    "src": "src/islands/security-groups-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+      "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+      "_ExclamationTriangleIcon.Cm5cZsyf.js",
+      "_EyeIcon.DGgODSOS.js"
+    ]
+  },
+  "src/islands/tasks-island.ts": {
+    "file": "tasks-island.CJe9CKx3.js",
+    "name": "tasks-island",
+    "src": "src/islands/tasks-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_tasks.B3qtl_sQ.js",
+      "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+      "_DataTable.vue_vue_type_script_setup_true_lang.jh55Izdj.js",
+      "_EyeIcon.DGgODSOS.js"
+    ]
+  },
+  "src/islands/vpcs-island.ts": {
+    "file": "vpcs-island.CXt3pjTa.js",
+    "name": "vpcs-island",
+    "src": "src/islands/vpcs-island.ts",
+    "isEntry": true,
+    "imports": [
+      "_main.C7xCgVXk.js",
+      "_SearchableSelect.vue_vue_type_script_setup_true_lang.2iaHzzyo.js",
+      "_ExclamationTriangleIcon.Cm5cZsyf.js"
+    ]
+  }
+}

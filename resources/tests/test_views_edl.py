@@ -615,9 +615,9 @@ class EDLENIsByTagsJSONTest(TestCase):
         self.client = Client()
         self.url = reverse('edl_enis_by_tags_json')
 
-        # Create user and get API token
+        # Create user and login (this endpoint uses @login_required, not @require_api_token)
         self.user = User.objects.create_user(username='testuser', password='testpass123')
-        self.token = self.user.profile.api_token
+        self.client.login(username='testuser', password='testpass123')
 
         # Create test data
         self.vpc = VPC.objects.create(
@@ -648,7 +648,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_structure(self):
         """Test JSON metadata structure."""
-        response = self.client.get(self.url, {'Environment': 'PROD', 'token': self.token})
+        response = self.client.get(self.url, {'Environment': 'PROD'})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
@@ -665,7 +665,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_values(self):
         """Test JSON metadata values."""
-        response = self.client.get(self.url, {'Environment': 'PROD', 'token': self.token})
+        response = self.client.get(self.url, {'Environment': 'PROD'})
 
         data = response.json()
 
@@ -678,7 +678,7 @@ class EDLENIsByTagsJSONTest(TestCase):
 
     def test_edl_enis_by_tags_json_no_filters(self):
         """Test JSON metadata with no filters."""
-        response = self.client.get(self.url, {'token': self.token})
+        response = self.client.get(self.url)
 
         data = response.json()
 

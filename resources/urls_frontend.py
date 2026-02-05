@@ -5,6 +5,9 @@ from django.urls import path
 from . import views_frontend, views_edl
 
 urlpatterns = [
+    # Health check (no auth required)
+    path('health/', views_frontend.health_check, name='health_check'),
+
     # Authentication
     path('login/', views_frontend.login_view, name='login'),
     path('logout/', views_frontend.logout_view, name='logout'),
@@ -16,11 +19,11 @@ urlpatterns = [
     path('accounts/', views_frontend.accounts_view, name='accounts'),
     path('vpcs/', views_frontend.vpcs_view, name='vpcs'),
     path('enis/', views_frontend.enis_view, name='enis'),
-    path('enis/<int:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
+    path('enis/<str:eni_id>/', views_frontend.eni_detail_view, name='eni_detail'),
     path('ec2-instances/', views_frontend.ec2_instances_view, name='ec2_instances'),
-    path('ec2-instances/<int:instance_id>/', views_frontend.ec2_instance_detail_view, name='ec2_instance_detail'),
+    path('ec2-instances/<str:instance_id>/', views_frontend.ec2_instance_detail_view, name='ec2_instance_detail'),
     path('security-groups/', views_frontend.security_groups_view, name='security_groups'),
-    path('security-groups/<int:sg_id>/', views_frontend.security_group_detail_view, name='security_group_detail'),
+    path('security-groups/<str:sg_id>/', views_frontend.security_group_detail_view, name='security_group_detail'),
 
     # EDL endpoints
     path('edl/', views_edl.edl_summary, name='edl_summary'),
@@ -37,14 +40,17 @@ urlpatterns = [
 
     # Account management
     path('accounts/add/', views_frontend.add_account_view, name='add_account'),
-    path('accounts/<int:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
-    path('accounts/<int:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
+    path('accounts/<str:account_id>/edit/', views_frontend.edit_account_view, name='edit_account'),
+    path('accounts/<str:account_id>/repoll/', views_frontend.repoll_account_view, name='repoll_account'),
     path('accounts/bulk-repoll/', views_frontend.bulk_repoll_accounts_view, name='bulk_repoll_accounts'),
     path('accounts/repoll-all/', views_frontend.repoll_all_instance_role_accounts_view, name='repoll_all_accounts'),
 
     # Task status
     path('tasks/', views_frontend.task_status_view, name='task_status'),
     path('tasks/<int:task_id>/', views_frontend.task_detail_view, name='task_detail'),
+
+    # Discovery logs
+    path('logs/', views_frontend.discovery_logs_view, name='discovery_logs'),
 
     # API endpoints
     path('api/accounts/', views_frontend.api_accounts_json, name='api_accounts'),

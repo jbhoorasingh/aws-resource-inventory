@@ -7,6 +7,43 @@ from rest_framework.authtoken.models import Token
 import secrets
 
 
+# =============================================================================
+# Custom Managers for Soft Delete Support
+# =============================================================================
+
+class SoftDeleteManager(models.Manager):
+    """Default manager that excludes soft-deleted records"""
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class AllObjectsManager(models.Manager):
+    """Manager that includes soft-deleted records"""
+    pass
+
+
+class SoftDeleteMixin(models.Model):
+    """
+    Mixin for soft delete functionality.
+    Adds deleted_at, last_seen_at, and missed_polls fields.
+    """
+    deleted_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="When this resource was soft-deleted"
+    )
+    last_seen_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="When this resource was last seen during polling"
+    )
+    missed_polls = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Number of consecutive polls where this resource was not found"
+    )
+
+    class Meta:
+        abstract = True
+
+
 class UserProfile(models.Model):
     """Extended user profile with API token for authentication"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -103,6 +140,21 @@ class AWSAccount(models.Model):
         help_text="Default regions to poll for this account (e.g., ['us-east-1', 'us-west-2'])"
     )
 
+    # Failure tracking for auto-disable
+    consecutive_failures = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Number of consecutive poll failures"
+    )
+    auto_poll_disabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether auto-polling is disabled due to consecutive failures"
+    )
+    last_failure_reason = models.TextField(
+        blank=True,
+        help_text="Reason for last poll failure"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -123,10 +175,30 @@ class AWSAccount(models.Model):
     @property
     def can_repoll(self):
         """Check if this account can be re-polled with stored configuration"""
-        return self.auth_method == 'instance_role' and bool(self.get_role_arn()) and bool(self.default_regions)
+        return (
+            self.auth_method == 'instance_role' and
+            bool(self.get_role_arn()) and
+            bool(self.default_regions) and
+            not self.auto_poll_disabled
+        )
+
+    def record_poll_success(self):
+        """Record a successful poll, resetting failure counters"""
+        self.consecutive_failures = 0
+        self.auto_poll_disabled = False
+        self.last_failure_reason = ''
+        self.save(update_fields=['consecutive_failures', 'auto_poll_disabled', 'last_failure_reason', 'updated_at'])
+
+    def record_poll_failure(self, reason: str):
+        """Record a poll failure, potentially disabling auto-poll after 3 failures"""
+        self.consecutive_failures += 1
+        self.last_failure_reason = reason[:1000] if reason else ''  # Truncate to 1000 chars
+        if self.consecutive_failures >= 3:
+            self.auto_poll_disabled = True
+        self.save(update_fields=['consecutive_failures', 'auto_poll_disabled', 'last_failure_reason', 'updated_at'])
 
 
-class VPC(models.Model):
+class VPC(SoftDeleteMixin, models.Model):
     """VPC information"""
     vpc_id = models.CharField(max_length=21, unique=True, help_text="VPC ID")
     region = models.CharField(max_length=50, help_text="AWS Region")
@@ -138,15 +210,22 @@ class VPC(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['vpc_id']
         unique_together = ['vpc_id', 'region']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='vpc_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.vpc_id} ({self.region})"
 
 
-class Subnet(models.Model):
+class Subnet(SoftDeleteMixin, models.Model):
     """Subnet information"""
     subnet_id = models.CharField(max_length=24, unique=True, help_text="Subnet ID")
     vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='subnets')
@@ -159,14 +238,21 @@ class Subnet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['subnet_id']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='subnet_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.subnet_id} ({self.availability_zone})"
 
 
-class SecurityGroup(models.Model):
+class SecurityGroup(SoftDeleteMixin, models.Model):
     """Security Group information"""
     sg_id = models.CharField(max_length=20, unique=True, help_text="Security Group ID")
     vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='security_groups')
@@ -175,6 +261,10 @@ class SecurityGroup(models.Model):
     tags = models.JSONField(default=dict, blank=True, help_text="AWS tags as key-value pairs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
 
     class Meta:
         ordering = ['sg_id']
@@ -217,11 +307,11 @@ class SecurityGroupRule(models.Model):
         return f"{self.rule_type.upper()} {protocol_display} {port_range} from {self.source_value}"
 
 
-class EC2Instance(models.Model):
+class EC2Instance(SoftDeleteMixin, models.Model):
     """EC2 Instance information"""
     instance_id = models.CharField(max_length=19, unique=True, help_text="EC2 Instance ID")
-    vpc = models.ForeignKey(VPC, on_delete=models.CASCADE, related_name='instances')
-    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='instances')
+    vpc = models.ForeignKey(VPC, on_delete=models.SET_NULL, null=True, related_name='instances')
+    subnet = models.ForeignKey(Subnet, on_delete=models.SET_NULL, null=True, related_name='instances')
     name = models.CharField(max_length=255, blank=True, help_text="Instance name tag")
     instance_type = models.CharField(max_length=50, help_text="Instance type (e.g., t2.micro, m5.large)")
     state = models.CharField(max_length=20, help_text="Instance state (running, stopped, etc.)")
@@ -236,18 +326,25 @@ class EC2Instance(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['instance_id']
         unique_together = ['instance_id', 'region']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='ec2_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.instance_id} ({self.instance_type})"
 
 
-class ENI(models.Model):
+class ENI(SoftDeleteMixin, models.Model):
     """Elastic Network Interface information"""
     eni_id = models.CharField(max_length=21, unique=True, help_text="ENI ID")
-    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='enis')
+    subnet = models.ForeignKey(Subnet, on_delete=models.SET_NULL, null=True, related_name='enis')
     ec2_instance = models.ForeignKey(EC2Instance, on_delete=models.SET_NULL, null=True, blank=True, related_name='enis', help_text="Attached EC2 instance")
     name = models.CharField(max_length=255, blank=True, help_text="ENI name tag")
     description = models.TextField(blank=True, help_text="ENI description")
@@ -263,8 +360,15 @@ class ENI(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Managers
+    objects = SoftDeleteManager()  # Default: excludes soft-deleted
+    all_objects = AllObjectsManager()  # Includes soft-deleted
+
     class Meta:
         ordering = ['eni_id']
+        indexes = [
+            models.Index(fields=['owner_account', 'deleted_at'], name='eni_owner_deleted_idx'),
+        ]
 
     def __str__(self):
         return f"{self.name or self.eni_id} ({self.private_ip_address})"
@@ -385,3 +489,53 @@ class DiscoveryTask(models.Model):
             return int((self.completed_accounts + self.failed_accounts) /
                        self.total_accounts * 100)
         return 0
+
+
+class DiscoveryLog(models.Model):
+    """Resource-level log entries generated during discovery tasks."""
+
+    LEVEL_CHOICES = [
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('resource_created', 'Resource Created'),
+        ('resource_updated', 'Resource Updated'),
+        ('resource_skipped', 'Resource Skipped'),
+        ('resource_soft_deleted', 'Resource Soft Deleted'),
+        ('resource_resurrected', 'Resource Resurrected'),
+        ('ec2_link_preserved', 'EC2 Link Preserved'),
+        ('lookup_failed', 'Lookup Failed'),
+        ('account_error', 'Account Error'),
+        ('account_success', 'Account Success'),
+    ]
+
+    task = models.ForeignKey(
+        DiscoveryTask, on_delete=models.CASCADE,
+        related_name='logs', null=True, blank=True
+    )
+    account = models.ForeignKey(
+        AWSAccount, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='discovery_logs'
+    )
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='info', db_index=True)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, db_index=True)
+    message = models.TextField()
+    resource_type = models.CharField(max_length=30, blank=True, db_index=True)
+    resource_id = models.CharField(max_length=255, blank=True, db_index=True)
+    region = models.CharField(max_length=30, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['task', 'level'], name='discoverylog_task_level_idx'),
+            models.Index(fields=['account', 'created_at'], name='discoverylog_acct_created_idx'),
+            models.Index(fields=['resource_type', 'resource_id'], name='discoverylog_res_type_id_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.category}: {self.message[:80]}"

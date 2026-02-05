@@ -13,33 +13,32 @@ from django.db import transaction
 from django.utils import timezone
 import json
 import logging
-from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance, DiscoveryTask
+from django.core.paginator import Paginator
+from .models import AWSAccount, ENI, VPC, Subnet, ENISecondaryIP, SecurityGroup, SecurityGroupRule, EC2Instance, DiscoveryTask, DiscoveryLog
 
 logger = logging.getLogger(__name__)
+
+
+def health_check(request):
+    """Simple health check endpoint for Docker/load balancer health checks"""
+    from django.db import connection
+    try:
+        # Check database connectivity
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse({'status': 'healthy', 'database': 'ok'})
+    except Exception as e:
+        return JsonResponse({'status': 'unhealthy', 'error': str(e)}, status=503)
 
 
 @login_required
 def accounts_view(request):
     """Display accounts page with polling functionality"""
-    # Since we removed the account->vpc relationship, we need to count ENIs differently
-    # We'll count ENIs by matching the account_id with the owner_account field
-    accounts = AWSAccount.objects.all().order_by('-last_polled', 'account_id')
-    
-    # Get ENI counts for all accounts in a single query
-    from django.db.models import Count
-    eni_counts = ENI.objects.values('owner_account').annotate(
-        count=Count('id')
-    ).values_list('owner_account', 'count')
-    
-    # Create a dictionary for quick lookup
-    eni_count_dict = dict(eni_counts)
-    
-    # Add ENI count for each account
-    for account in accounts:
-        account.eni_count = eni_count_dict.get(account.account_id, 0)
-    
+    # Check if user can poll accounts
+    can_poll = request.user.has_perm('resources.can_poll_accounts') or request.user.is_superuser
+
     context = {
-        'accounts': accounts,
+        'can_poll': can_poll,
     }
     return render(request, 'resources/accounts.html', context)
 
@@ -408,7 +407,7 @@ def repoll_account_view(request, account_id):
     from .tasks import repoll_account_with_instance_role
 
     try:
-        account = get_object_or_404(AWSAccount, id=account_id)
+        account = get_object_or_404(AWSAccount, account_id=account_id)
 
         # Verify account is configured for instance role auth
         if account.auth_method != 'instance_role':
@@ -710,7 +709,7 @@ def add_account_view(request):
 @permission_required('resources.can_poll_accounts', raise_exception=True)
 def edit_account_view(request, account_id):
     """Edit an existing account's configuration"""
-    account = get_object_or_404(AWSAccount, id=account_id)
+    account = get_object_or_404(AWSAccount, account_id=account_id)
 
     if request.method == 'POST':
         account.account_name = request.POST.get('account_name', '').strip()
@@ -871,7 +870,7 @@ def security_groups_view(request):
 def security_group_detail_view(request, sg_id):
     """Display detailed security group rules"""
     try:
-        security_group = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').get(id=sg_id)
+        security_group = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').get(sg_id=sg_id)
         
         # Get rules ordered by type and protocol
         rules = security_group.rules.all().order_by('rule_type', 'protocol', 'from_port')
@@ -985,7 +984,7 @@ def ec2_instance_detail_view(request, instance_id):
         ).prefetch_related(
             'enis__secondary_ips',
             'enis__eni_security_groups__security_group__rules'
-        ).get(id=instance_id)
+        ).get(instance_id=instance_id)
 
         # Get all ENIs for this instance with their security groups and rules
         enis = instance.enis.all()
@@ -1028,7 +1027,7 @@ def eni_detail_view(request, eni_id):
         ).prefetch_related(
             'secondary_ips',
             'eni_security_groups__security_group__rules'
-        ).get(id=eni_id)
+        ).get(eni_id=eni_id)
 
         # Get all security groups with their rules
         security_groups = []
@@ -1169,8 +1168,77 @@ def task_detail_view(request, task_id):
         messages.error(request, 'Access denied.')
         return redirect('task_status')
 
+    # Get logs for this task, with optional level filter
+    logs = DiscoveryLog.objects.filter(task=task).select_related('account').order_by('-created_at')
+    log_level = request.GET.get('log_level')
+    if log_level:
+        logs = logs.filter(level=log_level)
+
     context = {
         'task': task,
         'child_tasks': task.child_tasks.all().order_by('-created_at'),
+        'logs': logs[:200],
+        'log_level': log_level or '',
+        'log_counts': {
+            'info': DiscoveryLog.objects.filter(task=task, level='info').count(),
+            'warning': DiscoveryLog.objects.filter(task=task, level='warning').count(),
+            'error': DiscoveryLog.objects.filter(task=task, level='error').count(),
+        },
     }
     return render(request, 'resources/task_detail.html', context)
+
+
+@login_required
+def discovery_logs_view(request):
+    """Display discovery logs with filtering and pagination"""
+    logs = DiscoveryLog.objects.select_related('account', 'task').all()
+
+    # Apply filters
+    level = request.GET.get('level')
+    if level:
+        logs = logs.filter(level=level)
+
+    category = request.GET.get('category')
+    if category:
+        logs = logs.filter(category=category)
+
+    resource_type = request.GET.get('resource_type')
+    if resource_type:
+        logs = logs.filter(resource_type=resource_type)
+
+    account_id = request.GET.get('account')
+    if account_id:
+        logs = logs.filter(account__account_id=account_id)
+
+    task_id = request.GET.get('task')
+    if task_id:
+        logs = logs.filter(task_id=task_id)
+
+    search = request.GET.get('search')
+    if search:
+        logs = logs.filter(
+            Q(message__icontains=search) | Q(resource_id__icontains=search)
+        )
+
+    # Get filter options for the template
+    accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+    categories = DiscoveryLog.CATEGORY_CHOICES
+    resource_types = DiscoveryLog.objects.values_list('resource_type', flat=True).distinct().order_by('resource_type')
+
+    # Paginate
+    paginator = Paginator(logs, 50)
+    page = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'logs': page,
+        'level': level or '',
+        'category': category or '',
+        'resource_type': resource_type or '',
+        'account_id': account_id or '',
+        'task_id': task_id or '',
+        'search': search or '',
+        'accounts': accounts,
+        'categories': categories,
+        'resource_types': resource_types,
+    }
+    return render(request, 'resources/discovery_logs.html', context)

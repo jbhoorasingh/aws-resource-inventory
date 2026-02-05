@@ -246,6 +246,116 @@
 </div>
 {% endif %}
 
+<!-- Discovery Logs -->
+{% if logs %}
+<div class="bg-white shadow-lg rounded-lg fade-in mt-8" x-data="{ showLogs: true }">
+    <div class="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer" @click="showLogs = !showLogs">
+        <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-scroll text-aws-orange mr-2"></i> Discovery Logs
+            <span class="text-sm font-normal text-gray-500 ml-2">
+                ({{ log_counts.info }} info, {{ log_counts.warning }} warning, {{ log_counts.error }} error)
+            </span>
+        </h3>
+        <div class="flex items-center space-x-3">
+            <!-- Level filter pills -->
+            <div class="flex space-x-1" @click.stop>
+                <a href="{% url 'task_detail' task.id %}"
+                   class="px-2 py-1 rounded text-xs font-medium {% if not log_level %}bg-gray-700 text-white{% else %}bg-gray-200 text-gray-600 hover:bg-gray-300{% endif %}">
+                    All
+                </a>
+                {% if log_counts.info %}
+                <a href="{% url 'task_detail' task.id %}?log_level=info"
+                   class="px-2 py-1 rounded text-xs font-medium {% if log_level == 'info' %}bg-green-600 text-white{% else %}bg-green-100 text-green-700 hover:bg-green-200{% endif %}">
+                    Info ({{ log_counts.info }})
+                </a>
+                {% endif %}
+                {% if log_counts.warning %}
+                <a href="{% url 'task_detail' task.id %}?log_level=warning"
+                   class="px-2 py-1 rounded text-xs font-medium {% if log_level == 'warning' %}bg-yellow-500 text-white{% else %}bg-yellow-100 text-yellow-700 hover:bg-yellow-200{% endif %}">
+                    Warning ({{ log_counts.warning }})
+                </a>
+                {% endif %}
+                {% if log_counts.error %}
+                <a href="{% url 'task_detail' task.id %}?log_level=error"
+                   class="px-2 py-1 rounded text-xs font-medium {% if log_level == 'error' %}bg-red-600 text-white{% else %}bg-red-100 text-red-700 hover:bg-red-200{% endif %}">
+                    Error ({{ log_counts.error }})
+                </a>
+                {% endif %}
+            </div>
+            <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': showLogs }"></i>
+        </div>
+    </div>
+    <div x-show="showLogs" x-transition>
+        <div class="overflow-x-auto">
+            <table class="w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resource</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for log in logs %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500 font-mono">
+                            {{ log.created_at|date:"H:i:s" }}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                            {% if log.level == 'info' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <i class="fas fa-info-circle mr-1"></i> Info
+                                </span>
+                            {% elif log.level == 'warning' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i> Warn
+                                </span>
+                            {% elif log.level == 'error' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    <i class="fas fa-times-circle mr-1"></i> Error
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-600">
+                            {{ log.get_category_display }}
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-900 max-w-md truncate" title="{{ log.message }}">
+                            {{ log.message|truncatewords:12 }}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                            {% if log.resource_id %}
+                                <code class="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">{{ log.resource_type|upper }}:{{ log.resource_id }}</code>
+                            {% else %}
+                                <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500">
+                            {% if log.region %}
+                                <span class="inline-block bg-gray-100 px-2 py-0.5 rounded">{{ log.region }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if logs|length >= 200 %}
+        <div class="p-4 text-center text-sm text-gray-500 border-t border-gray-200">
+            Showing first 200 logs.
+            <a href="{% url 'discovery_logs' %}?task={{ task.id }}" class="text-aws-orange hover:underline">
+                View all logs for this task
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Back Button -->
 <div class="mt-8 fade-in">
     <a href="{% url 'task_status' %}" class="text-gray-600 hover:text-gray-900">

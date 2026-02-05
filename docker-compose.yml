@@ -1,11 +1,19 @@
 # Load environment variables from .env file
 # Copy .env.example to .env and customize before running
+#
+# USAGE:
+#   Development (with local DB): docker-compose --profile local up
+#   Production (external DB):    docker-compose up
+#
+# Set DATABASE_URL in .env for external database (e.g., RDS):
+#   DATABASE_URL=postgresql://user:pass@rds-host:5432/dbname
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (optional - use profile "local" for local development)
   db:
     image: postgres:16-alpine
     container_name: aws-inventory-db
+    profiles: ["local"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
       POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
@@ -51,13 +59,8 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
-      # Database settings
-      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-awsinventory}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
-      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Database - use DATABASE_URL from .env
+      DATABASE_URL: ${DATABASE_URL}
 
       # AWS credentials (optional - can be provided at runtime)
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -80,10 +83,14 @@ services:
     networks:
       - aws-inventory-network
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
   # Nginx Reverse Proxy
@@ -109,21 +116,16 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: aws-inventory-celery
-    command: celery -A aws_inventory worker -l INFO --concurrency=4
+    # container_name: aws-inventory-celery
+    command: celery -A aws_inventory worker -l INFO --concurrency=${CELERY_WORKER_CONCURRENCY:-20}
     environment:
       # Django settings
       DJANGO_SETTINGS_MODULE: aws_inventory.settings
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
 
-      # Database settings
-      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-awsinventory}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
-      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Database - use DATABASE_URL from .env
+      DATABASE_URL: ${DATABASE_URL}
 
       # Celery settings
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -140,8 +142,6 @@ services:
     networks:
       - aws-inventory-network
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -160,13 +160,8 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
 
-      # Database settings
-      DATABASE_URL: postgresql://${POSTGRES_USER:-awsinventory}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-awsinventory}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-awsinventory}
-      POSTGRES_USER: ${POSTGRES_USER:-awsinventory}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Database - use DATABASE_URL from .env
+      DATABASE_URL: ${DATABASE_URL}
 
       # Celery settings
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -174,15 +169,31 @@ services:
 
       # Scheduled polling settings
       SCHEDULED_POLLING_ENABLED: ${SCHEDULED_POLLING_ENABLED:-true}
-      SCHEDULED_POLLING_MAX_CONCURRENT: ${SCHEDULED_POLLING_MAX_CONCURRENT:-2}
-      SCHEDULED_POLLING_STAGGER_SECONDS: ${SCHEDULED_POLLING_STAGGER_SECONDS:-30}
+      SCHEDULED_POLLING_MAX_CONCURRENT: ${SCHEDULED_POLLING_MAX_CONCURRENT:-20}
+      SCHEDULED_POLLING_STAGGER_SECONDS: ${SCHEDULED_POLLING_STAGGER_SECONDS:-1}
     volumes:
       - logs_volume:/app/logs
     networks:
       - aws-inventory-network
     depends_on:
-      db:
+      redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Flower - Celery Monitoring
+  flower:
+    image: mher/flower:2.0
+    container_name: aws-inventory-flower
+    command: celery --broker=redis://redis:6379/0 flower --port=5555
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-changeme}
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    networks:
+      - aws-inventory-network
+    depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped

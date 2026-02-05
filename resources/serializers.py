@@ -4,14 +4,34 @@ Serializers for AWS resources API
 from rest_framework import serializers
 from .models import (
     AWSAccount, VPC, Subnet, SecurityGroup, SecurityGroupRule, EC2Instance, ENI,
-    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask, DiscoveryLog
 )
 
 
 class AWSAccountSerializer(serializers.ModelSerializer):
+    eni_count = serializers.SerializerMethodField()
+    auth_method = serializers.SerializerMethodField()
+    can_repoll = serializers.SerializerMethodField()
+
     class Meta:
         model = AWSAccount
-        fields = ['id', 'account_id', 'account_name', 'is_active', 'last_polled', 'created_at', 'updated_at']
+        fields = [
+            'id', 'account_id', 'account_name', 'is_active', 'role_arn',
+            'external_id', 'last_polled', 'created_at', 'updated_at',
+            'eni_count', 'auth_method', 'can_repoll'
+        ]
+
+    def get_eni_count(self, obj):
+        return ENI.objects.filter(owner_account=obj.account_id).count()
+
+    def get_auth_method(self, obj):
+        # Use the actual model field value
+        return obj.auth_method
+
+    def get_can_repoll(self, obj):
+        # Use the model's can_repoll property which checks:
+        # auth_method == 'instance_role' AND role_arn AND default_regions
+        return obj.can_repoll
 
 
 class VPCSerializer(serializers.ModelSerializer):
@@ -99,14 +119,14 @@ class ENISecurityGroupSerializer(serializers.ModelSerializer):
 
 
 class ENISerializer(serializers.ModelSerializer):
-    subnet_id = serializers.CharField(source='subnet.subnet_id', read_only=True)
-    subnet_cidr = serializers.CharField(source='subnet.cidr_block', read_only=True)
-    vpc_id = serializers.CharField(source='subnet.vpc.vpc_id', read_only=True)
-    vpc_cidr = serializers.CharField(source='subnet.vpc.cidr_block', read_only=True)
-    vpc_owner_account = serializers.CharField(source='subnet.vpc.owner_account', read_only=True)
-    subnet_owner_account = serializers.CharField(source='subnet.owner_account', read_only=True)
-    availability_zone = serializers.CharField(source='subnet.availability_zone', read_only=True)
-    region = serializers.CharField(source='subnet.vpc.region', read_only=True)
+    subnet_id = serializers.CharField(source='subnet.subnet_id', read_only=True, allow_null=True)
+    subnet_cidr = serializers.CharField(source='subnet.cidr_block', read_only=True, allow_null=True)
+    vpc_id = serializers.CharField(source='subnet.vpc.vpc_id', read_only=True, allow_null=True)
+    vpc_cidr = serializers.CharField(source='subnet.vpc.cidr_block', read_only=True, allow_null=True)
+    vpc_owner_account = serializers.CharField(source='subnet.vpc.owner_account', read_only=True, allow_null=True)
+    subnet_owner_account = serializers.CharField(source='subnet.owner_account', read_only=True, allow_null=True)
+    availability_zone = serializers.CharField(source='subnet.availability_zone', read_only=True, allow_null=True)
+    region = serializers.CharField(source='subnet.vpc.region', read_only=True, allow_null=True)
 
     secondary_ips = ENISecondaryIPSerializer(many=True, read_only=True)
     security_groups = ENISecurityGroupSerializer(source='eni_security_groups', many=True, read_only=True)
@@ -329,3 +349,18 @@ class TriggerBulkDiscoverySerializer(serializers.Serializer):
     session_token = serializers.CharField(required=False, allow_blank=True, default='')
     regions = serializers.ListField(child=serializers.CharField())
     accounts = BulkDiscoveryAccountSerializer(many=True)
+
+
+class DiscoveryLogSerializer(serializers.ModelSerializer):
+    """Serializer for discovery log entries"""
+    account_id = serializers.CharField(source='account.account_id', read_only=True, default=None)
+    account_name = serializers.CharField(source='account.account_name', read_only=True, default=None)
+    task_status = serializers.CharField(source='task.status', read_only=True, default=None)
+
+    class Meta:
+        model = DiscoveryLog
+        fields = [
+            'id', 'task', 'account_id', 'account_name', 'level', 'category',
+            'message', 'resource_type', 'resource_id', 'region',
+            'context', 'created_at', 'task_status'
+        ]

@@ -4,36 +4,179 @@ API views for AWS resources
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q
+from django.db import transaction
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
 from .models import (
-    AWSAccount, VPC, Subnet, SecurityGroup, ENI,
-    ENISecondaryIP, ENISecurityGroup, DiscoveryTask
+    AWSAccount, VPC, Subnet, SecurityGroup, ENI, EC2Instance,
+    ENISecondaryIP, ENISecurityGroup, DiscoveryTask, DiscoveryLog
 )
 from .serializers import (
     AWSAccountSerializer, VPCSerializer, SubnetSerializer,
     SecurityGroupSerializer, ENISerializer, ENIDetailSerializer,
-    ResourceSummarySerializer, VPCTreeSerializer, SubnetTreeSerializer,
-    DiscoveryTaskSerializer, DiscoveryTaskDetailSerializer,
-    TriggerDiscoverySerializer, TriggerBulkDiscoverySerializer
+    EC2InstanceSerializer, ResourceSummarySerializer, VPCTreeSerializer,
+    SubnetTreeSerializer, DiscoveryTaskSerializer, DiscoveryTaskDetailSerializer,
+    TriggerDiscoverySerializer, TriggerBulkDiscoverySerializer,
+    DiscoveryLogSerializer
 )
+
+
+class CanPollAccountsPermission:
+    """Custom permission to check if user can poll accounts"""
+    def has_permission(self, request, view):
+        return request.user.has_perm('resources.can_poll_accounts') or request.user.is_superuser
 
 
 class AWSAccountViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AWSAccount.objects.all()
     serializer_class = AWSAccountSerializer
+    lookup_field = 'account_id'
+    lookup_url_kwarg = 'account_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['is_active']
     search_fields = ['account_id', 'account_name']
     ordering_fields = ['account_id', 'account_name', 'created_at']
     ordering = ['account_id']
 
+    @action(detail=False, methods=['get'])
+    def dropdown_options(self, request):
+        """Get accounts formatted for dropdown display with friendly names"""
+        accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+
+        options = []
+        for account in accounts:
+            label = f"{account.account_name} ({account.account_id})" if account.account_name else account.account_id
+            sublabel = None
+            if account.last_polled:
+                sublabel = f"Last polled: {account.last_polled.strftime('%Y-%m-%d %H:%M')}"
+            else:
+                sublabel = "Never polled"
+
+            options.append({
+                'value': account.account_id,
+                'label': label,
+                'sublabel': sublabel
+            })
+
+        return Response(options)
+
+    @action(detail=True, methods=['post'])
+    def repoll(self, request, account_id=None):
+        """Re-poll a single account using instance role authentication"""
+        from .tasks import repoll_account_with_instance_role
+
+        # Check permission
+        if not request.user.has_perm('resources.can_poll_accounts') and not request.user.is_superuser:
+            return Response(
+                {'detail': 'You do not have permission to poll accounts.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        account = self.get_object()
+
+        # Verify account is configured for instance role auth
+        if account.auth_method != 'instance_role':
+            return Response(
+                {'detail': f'Account {account.account_id} is not configured for instance role authentication.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not account.can_repoll:
+            return Response(
+                {'detail': f'Account {account.account_id} cannot be re-polled. Ensure default_regions and role configuration are set.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create task record and queue in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='single',
+                status='pending',
+                account=account,
+                regions=account.default_regions,
+                initiated_by=request.user,
+                total_accounts=1
+            )
+
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            acct_id = account.id
+
+            # Queue the Celery task after database commit
+            transaction.on_commit(
+                lambda: repoll_account_with_instance_role.delay(
+                    task_record_id=task_id,
+                    account_id=acct_id
+                )
+            )
+
+        return Response({
+            'task_id': task_record.id,
+            'message': f'Re-poll queued for account {account.account_id}'
+        })
+
+    @action(detail=False, methods=['post'])
+    def repoll_all(self, request):
+        """Re-poll ALL accounts configured with instance role authentication"""
+        from .tasks import bulk_repoll_accounts_with_instance_role
+
+        # Check permission
+        if not request.user.has_perm('resources.can_poll_accounts') and not request.user.is_superuser:
+            return Response(
+                {'detail': 'You do not have permission to poll accounts.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get all accounts with instance_role auth method that can be re-polled
+        all_instance_role_accounts = AWSAccount.objects.filter(
+            is_active=True
+        )
+
+        repollable_accounts = [a for a in all_instance_role_accounts if a.can_repoll]
+
+        if not repollable_accounts:
+            return Response(
+                {'detail': 'No accounts are configured for instance role re-polling.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create parent task record and queue in atomic block
+        with transaction.atomic():
+            task_record = DiscoveryTask.objects.create(
+                task_type='bulk',
+                status='pending',
+                regions=[],  # Will be set per-account
+                initiated_by=request.user,
+                total_accounts=len(repollable_accounts)
+            )
+
+            # Capture values for the lambda closure
+            task_id = task_record.id
+            account_id_list = [a.id for a in repollable_accounts]
+            user_id = request.user.id
+
+            # Queue the bulk discovery task after database commit
+            transaction.on_commit(
+                lambda: bulk_repoll_accounts_with_instance_role.delay(
+                    task_record_id=task_id,
+                    account_ids=account_id_list,
+                    user_id=user_id
+                )
+            )
+
+        return Response({
+            'task_id': task_record.id,
+            'message': f'Re-poll queued for {len(repollable_accounts)} instance role accounts'
+        })
+
 
 class VPCViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = VPC.objects.all()
     serializer_class = VPCSerializer
+    lookup_field = 'vpc_id'
+    lookup_url_kwarg = 'vpc_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['region', 'is_default', 'state', 'owner_account']
     search_fields = ['vpc_id', 'cidr_block', 'owner_account']
@@ -66,16 +209,40 @@ class VPCViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def tree_detail(self, request, pk=None):
+    def tree_detail(self, request, vpc_id=None):
         """Get single VPC with nested subnets and all resources"""
         vpc = self.get_object()
         serializer = VPCTreeSerializer(vpc)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def filter_options(self, request):
+        """Get all available filter options for VPCs with friendly names"""
+        # Get regions
+        regions = list(VPC.objects.values_list('region', flat=True).distinct().order_by('region'))
+
+        # Get accounts with friendly names
+        accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+        account_options = []
+        for acc in accounts:
+            label = f"{acc.account_name} ({acc.account_id})" if acc.account_name else acc.account_id
+            account_options.append({'value': acc.account_id, 'label': label})
+
+        # Get states
+        states = list(VPC.objects.values_list('state', flat=True).distinct().order_by('state'))
+
+        return Response({
+            'regions': [{'value': r, 'label': r} for r in regions],
+            'accounts': account_options,
+            'states': [{'value': s, 'label': s} for s in states],
+        })
+
 
 class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subnet.objects.select_related('vpc').all()
     serializer_class = SubnetSerializer
+    lookup_field = 'subnet_id'
+    lookup_url_kwarg = 'subnet_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vpc', 'vpc__region', 'availability_zone', 'state', 'owner_account']
     search_fields = ['subnet_id', 'name', 'cidr_block', 'owner_account']
@@ -106,7 +273,7 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
-    def tree_detail(self, request, pk=None):
+    def tree_detail(self, request, subnet_id=None):
         """Get single subnet with nested resources"""
         subnet = self.get_object()
         serializer = SubnetTreeSerializer(subnet)
@@ -116,11 +283,44 @@ class SubnetViewSet(viewsets.ReadOnlyModelViewSet):
 class SecurityGroupViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SecurityGroup.objects.select_related('vpc').prefetch_related('rules').all()
     serializer_class = SecurityGroupSerializer
+    lookup_field = 'sg_id'
+    lookup_url_kwarg = 'sg_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['vpc', 'vpc__region']
     search_fields = ['sg_id', 'name', 'description']
     ordering_fields = ['sg_id', 'name', 'created_at']
     ordering = ['sg_id']
+
+    @action(detail=False, methods=['get'])
+    def filter_options(self, request):
+        """Get all available filter options for Security Groups with friendly names"""
+        # Get regions from VPCs
+        regions = list(VPC.objects.values_list('region', flat=True).distinct().order_by('region'))
+
+        # Get accounts with friendly names
+        accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+        account_options = []
+        for acc in accounts:
+            label = f"{acc.account_name} ({acc.account_id})" if acc.account_name else acc.account_id
+            account_options.append({'value': acc.account_id, 'label': label})
+
+        # Get VPCs with friendly names
+        vpcs_qs = VPC.objects.all().order_by('vpc_id')
+        vpc_options = []
+        for vpc in vpcs_qs:
+            acc = AWSAccount.objects.filter(account_id=vpc.owner_account).first()
+            acc_name = f" - {acc.account_name}" if acc and acc.account_name else ""
+            vpc_options.append({
+                'value': vpc.id,
+                'label': f"{vpc.vpc_id}{acc_name}",
+                'sublabel': f"{vpc.region} - {vpc.cidr_block}"
+            })
+
+        return Response({
+            'regions': [{'value': r, 'label': r} for r in regions],
+            'accounts': account_options,
+            'vpcs': vpc_options,
+        })
 
 
 class ENIViewSet(viewsets.ReadOnlyModelViewSet):
@@ -129,17 +329,19 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
     ).prefetch_related(
         'secondary_ips', 'eni_security_groups__security_group'
     ).all()
+    lookup_field = 'eni_id'
+    lookup_url_kwarg = 'eni_id'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
         'subnet', 'subnet__vpc', 'subnet__vpc__region', 'owner_account',
         'interface_type', 'status', 'attached_resource_type'
     ]
     search_fields = [
-        'eni_id', 'name', 'description', 'private_ip_address', 
+        'eni_id', 'name', 'description', 'private_ip_address',
         'public_ip_address', 'attached_resource_id'
     ]
     ordering_fields = [
-        'eni_id', 'name', 'private_ip_address', 'public_ip_address', 
+        'eni_id', 'name', 'private_ip_address', 'public_ip_address',
         'interface_type', 'status', 'created_at'
     ]
     ordering = ['eni_id']
@@ -248,6 +450,127 @@ class ENIViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(enis, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def filter_options(self, request):
+        """Get all available filter options for ENIs with friendly names"""
+        from .models import EC2Instance
+
+        # Get regions from VPCs
+        regions = list(VPC.objects.values_list('region', flat=True).distinct().order_by('region'))
+
+        # Get accounts with friendly names
+        accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+        account_options = []
+        for acc in accounts:
+            label = f"{acc.account_name} ({acc.account_id})" if acc.account_name else acc.account_id
+            account_options.append({'value': acc.account_id, 'label': label})
+
+        # Get VPCs with friendly names
+        vpcs_qs = VPC.objects.all().order_by('vpc_id')
+        vpc_options = []
+        for vpc in vpcs_qs:
+            acc = AWSAccount.objects.filter(account_id=vpc.owner_account).first()
+            acc_name = f" - {acc.account_name}" if acc and acc.account_name else ""
+            vpc_options.append({
+                'value': vpc.id,
+                'label': f"{vpc.vpc_id}{acc_name}",
+                'sublabel': f"{vpc.region} - {vpc.cidr_block}"
+            })
+
+        # Get subnets with friendly names
+        subnets_qs = Subnet.objects.select_related('vpc').all().order_by('subnet_id')
+        subnet_options = []
+        for subnet in subnets_qs:
+            name = subnet.name if subnet.name else subnet.subnet_id
+            subnet_options.append({
+                'value': subnet.id,
+                'label': name,
+                'sublabel': f"{subnet.vpc.vpc_id} - {subnet.cidr_block} ({subnet.availability_zone})"
+            })
+
+        # Get statuses
+        statuses = list(ENI.objects.values_list('status', flat=True).distinct().order_by('status'))
+
+        # Get interface types
+        interface_types = list(ENI.objects.values_list('interface_type', flat=True).distinct().order_by('interface_type'))
+
+        return Response({
+            'regions': [{'value': r, 'label': r} for r in regions],
+            'accounts': account_options,
+            'vpcs': vpc_options,
+            'subnets': subnet_options,
+            'statuses': [{'value': s, 'label': s} for s in statuses],
+            'interface_types': [{'value': t, 'label': t} for t in interface_types],
+        })
+
+
+class EC2InstanceViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for EC2 Instances"""
+    queryset = EC2Instance.objects.select_related('vpc', 'subnet').all()
+    serializer_class = EC2InstanceSerializer
+    lookup_field = 'instance_id'
+    lookup_url_kwarg = 'instance_id'
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['region', 'state', 'instance_type', 'vpc', 'subnet', 'owner_account', 'platform']
+    search_fields = ['instance_id', 'name', 'private_ip_address', 'public_ip_address']
+    ordering_fields = ['instance_id', 'name', 'state', 'instance_type', 'created_at']
+    ordering = ['instance_id']
+
+    @action(detail=False, methods=['get'])
+    def filter_options(self, request):
+        """Get all available filter options for EC2 Instances with friendly names"""
+        # Get regions
+        regions = list(EC2Instance.objects.values_list('region', flat=True).distinct().order_by('region'))
+
+        # Get accounts with friendly names
+        accounts = AWSAccount.objects.filter(is_active=True).order_by('account_name', 'account_id')
+        account_options = []
+        for acc in accounts:
+            label = f"{acc.account_name} ({acc.account_id})" if acc.account_name else acc.account_id
+            account_options.append({'value': acc.account_id, 'label': label})
+
+        # Get VPCs with friendly names
+        vpcs_qs = VPC.objects.all().order_by('vpc_id')
+        vpc_options = []
+        for vpc in vpcs_qs:
+            acc = AWSAccount.objects.filter(account_id=vpc.owner_account).first()
+            acc_name = f" - {acc.account_name}" if acc and acc.account_name else ""
+            vpc_options.append({
+                'value': vpc.id,
+                'label': f"{vpc.vpc_id}{acc_name}",
+                'sublabel': f"{vpc.region} - {vpc.cidr_block}"
+            })
+
+        # Get subnets with friendly names
+        subnets_qs = Subnet.objects.select_related('vpc').all().order_by('subnet_id')
+        subnet_options = []
+        for subnet in subnets_qs:
+            name = subnet.name if subnet.name else subnet.subnet_id
+            subnet_options.append({
+                'value': subnet.id,
+                'label': name,
+                'sublabel': f"{subnet.vpc.vpc_id} - {subnet.cidr_block} ({subnet.availability_zone})"
+            })
+
+        # Get states
+        states = list(EC2Instance.objects.values_list('state', flat=True).distinct().order_by('state'))
+
+        # Get instance types
+        instance_types = list(EC2Instance.objects.values_list('instance_type', flat=True).distinct().order_by('instance_type'))
+
+        # Get platforms
+        platforms = list(EC2Instance.objects.exclude(platform='').values_list('platform', flat=True).distinct().order_by('platform'))
+
+        return Response({
+            'regions': [{'value': r, 'label': r} for r in regions],
+            'accounts': account_options,
+            'vpcs': vpc_options,
+            'subnets': subnet_options,
+            'states': [{'value': s, 'label': s} for s in states],
+            'instance_types': [{'value': t, 'label': t} for t in instance_types],
+            'platforms': [{'value': p, 'label': p} for p in platforms],
+        })
+
 
 class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -299,14 +622,30 @@ class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
         data = serializer.validated_data
 
         # Get or create account immediately
-        account, _ = AWSAccount.objects.get_or_create(
+        # Set auth_method based on whether role_arn is provided
+        role_arn = data.get('role_arn', '')
+        auth_method = 'instance_role' if role_arn else 'credentials'
+
+        account, created = AWSAccount.objects.get_or_create(
             account_id=data['account_number'],
             defaults={
                 'account_name': data.get('account_name', ''),
-                'role_arn': data.get('role_arn', ''),
+                'role_arn': role_arn,
                 'external_id': data.get('external_id', ''),
+                'auth_method': auth_method,
+                'default_regions': data['regions'],
             }
         )
+
+        # If account already existed and role_arn is provided, update auth_method
+        if not created and role_arn and account.auth_method != 'instance_role':
+            account.auth_method = 'instance_role'
+            account.role_arn = role_arn
+            if data.get('external_id'):
+                account.external_id = data['external_id']
+            if data['regions']:
+                account.default_regions = data['regions']
+            account.save()
 
         # Create task record
         task_record = DiscoveryTask.objects.create(
@@ -413,3 +752,33 @@ class DiscoveryTaskViewSet(viewsets.ReadOnlyModelViewSet):
             'failed': qs.filter(status='failed').count(),
             'cancelled': qs.filter(status='cancelled').count(),
         })
+
+    @action(detail=True, methods=['get'])
+    def logs(self, request, pk=None):
+        """Get discovery logs for a specific task"""
+        task = self.get_object()
+        logs = DiscoveryLog.objects.filter(task=task).select_related('account')
+        level = request.query_params.get('level')
+        if level:
+            logs = logs.filter(level=level)
+        category = request.query_params.get('category')
+        if category:
+            logs = logs.filter(category=category)
+        page = self.paginate_queryset(logs)
+        if page is not None:
+            serializer = DiscoveryLogSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = DiscoveryLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+class DiscoveryLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for viewing discovery logs with filtering and search"""
+    queryset = DiscoveryLog.objects.select_related('account', 'task').all()
+    serializer_class = DiscoveryLogSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['level', 'category', 'resource_type', 'region', 'task', 'account']
+    search_fields = ['message', 'resource_id']
+    ordering_fields = ['created_at', 'level']
+    ordering = ['-created_at']
